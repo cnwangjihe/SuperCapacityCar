@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "retarget.h": "c",
+        "crc.h": "c",
+        "esp8266.h": "c",
+        "freertos.h": "c",
+        "cstdlib": "c",
+        "freertosconfig.h": "c"
+    }
+}
