@@ -42,7 +42,7 @@ extern "C" {
 //   size_t len;
 //   uint8_t id;
 // }ACKRequest;
-#define UART_BUF_SIZE 80
+#define UART_BUF_SIZE 0x200
 typedef struct {
 	uint8_t *data;
   size_t len;
@@ -102,11 +102,14 @@ void Error_Handler(void);
 #define QOS_NONE 0
 #define MAX_CAP_VOL 10
 #define MIN_CAP_VOL 2
-#define RECIEVE_QUEUE_MAX 0x20
+#define RECIEVE_QUEUE_MAX 0x80
 #define UDP_NOT_READY 0
 #define UDP_READY 1
 #define NETWORK_NOT_READY 0
 #define NETWORK_READY 1
+#define ESP_NON 0
+#define ESP_CWJ 1
+#define ESP_GOK 2
 #define ITMassert(x,y) if ((x) == 0) {printf("%s",(y));}
 #define DEBUG
 #ifdef DEBUG

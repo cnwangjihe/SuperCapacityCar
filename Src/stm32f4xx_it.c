@@ -27,6 +27,7 @@
 #include "task.h"
 #include "cmsis_os.h"
 #include "stream_buffer.h"
+#include "message_buffer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,10 +49,12 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-extern UARTPackage RecievedPackage[RECIEVE_QUEUE_MAX];
-extern uint8_t RecievedPackagePos;
-extern StreamBufferHandle_t RecieveQueueHandle, ESP8266RetQueueHandle;
-uint8_t usart1_status;
+// extern UARTPackage RecievedPackage[RECIEVE_QUEUE_MAX];
+// extern uint8_t RecievedPackagePos;
+extern MessageBufferHandle_t RecieveQueueHandle, ESP8266RetQueueHandle;
+// uint8_t usart1_status;
+uint8_t BufferLen = 0;
+uint8_t Buffer[UART_BUF_SIZE];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -194,52 +197,83 @@ void USART1_IRQHandler(void)
 {
   /* USER CODE BEGIN USART1_IRQn 0 */
   // itm_printf("az");
+
   if ((__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE) != RESET))
   {
-    // itm_printf("-1");
-    if (usart1_status == USART_RECIEVE_PENDING)
+    if (BufferLen == UART_BUF_SIZE)
     {
-      RecievedPackagePos++;
-      RecievedPackagePos &= (RECIEVE_QUEUE_MAX - 1);
-      RecievedPackage[RecievedPackagePos].len = 0;
-      usart1_status = USART_RECIEVE_RUNNING;
-      __HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
+      // usart1_status = USART_RECIEVE_OVERFLW;
+      BufferLen = 0; // drop
+      itm_printf("Shit!Recived line tooooooo looooong\n");
     }
-    if (usart1_status != USART_RECIEVE_OVERFLW)
+    Buffer[BufferLen++] = (uint8_t)(huart1.Instance->DR & (uint8_t)0x00FF);
+    if (BufferLen == 2 && Buffer[0]=='>' && Buffer[1]==' ')
     {
-      RecievedPackage[RecievedPackagePos].s[RecievedPackage[RecievedPackagePos].len++] = (uint8_t)(huart1.Instance->DR & (uint8_t)0x00FF);
-      if (RecievedPackage[RecievedPackagePos].len == 1 && (RecievedPackage[RecievedPackagePos].s[0] == '\r' \
-          || RecievedPackage[RecievedPackagePos].s[0] == '\n' || RecievedPackage[RecievedPackagePos].s[0] == ' '))
-        RecievedPackage[RecievedPackagePos].len--;
-      if (RecievedPackage[RecievedPackagePos].len == UART_BUF_SIZE)
-        usart1_status = USART_RECIEVE_OVERFLW;
+      xMessageBufferSendFromISR(ESP8266RetQueueHandle,Buffer,BufferLen,NULL);
+      BufferLen = 0;
+    }
+    else if (BufferLen > 1 && Buffer[BufferLen-2] == '\r' && Buffer[BufferLen-1] == '\n') // reach the end of line
+    {
+      if (BufferLen > 2)
+      {
+        if (Buffer[0] == '+' && Buffer[1] == 'I')
+          xMessageBufferSendFromISR(RecieveQueueHandle,Buffer,BufferLen-2,NULL);
+        else
+          xMessageBufferSendFromISR(ESP8266RetQueueHandle,Buffer,BufferLen-2,NULL);
+      }
+      BufferLen = 0;
     }
     __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE);
-    return;
+    return ;
   }
-  if ((__HAL_UART_GET_FLAG(&huart1, UART_FLAG_IDLE) != RESET))
-  {
-    __HAL_UART_DISABLE_IT(&huart1,UART_IT_IDLE);
-    if (usart1_status != USART_RECIEVE_OVERFLW)
-    {
-      // itm_printf("Again?");
-      usart1_status = USART_RECIEVE_PENDING;
-      if (RecievedPackage[RecievedPackagePos].len >=2 && RecievedPackage[RecievedPackagePos].s[0] == '+' && RecievedPackage[RecievedPackagePos].s[1] == 'I')
-      {
-        // xQueueSendFromISR(RecieveQueueHandle,&RecievedPackagePos,NULL);
-        xStreamBufferSendFromISR(RecieveQueueHandle,&RecievedPackagePos,sizeof(UDPRequest),NULL);
-      }
-      else
-      {
-        // xQueueSendFromISR(ESP8266RetQueueHandle,&RecievedPackagePos,NULL);
-        xStreamBufferSendFromISR(ESP8266RetQueueHandle,&RecievedPackagePos,sizeof(UDPRequest),NULL);
-      }
-      // itm_printf("No...\n");
-    }
-    else
-      usart1_status = USART_RECIEVE_PENDING;
-    return;
-  }
+
+  // if ((__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE) != RESET))
+  // {
+  //   // itm_printf("-1");
+  //   if (usart1_status == USART_RECIEVE_PENDING)
+  //   {
+  //     RecievedPackagePos++;
+  //     RecievedPackagePos &= (RECIEVE_QUEUE_MAX - 1);
+  //     RecievedPackage[RecievedPackagePos].len = 0;
+  //     usart1_status = USART_RECIEVE_RUNNING;
+  //     __HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
+  //   }
+  //   if (usart1_status != USART_RECIEVE_OVERFLW)
+  //   {
+  //     RecievedPackage[RecievedPackagePos].s[RecievedPackage[RecievedPackagePos].len++] = (uint8_t)(huart1.Instance->DR & (uint8_t)0x00FF);
+  //     if (RecievedPackage[RecievedPackagePos].len == 1 && (RecievedPackage[RecievedPackagePos].s[0] == '\r' 
+  //         || RecievedPackage[RecievedPackagePos].s[0] == '\n' || RecievedPackage[RecievedPackagePos].s[0] == ' '))
+  //       RecievedPackage[RecievedPackagePos].len--;
+  //     if (RecievedPackage[RecievedPackagePos].len == UART_BUF_SIZE)
+  //       usart1_status = USART_RECIEVE_OVERFLW;
+  //   }
+  //   __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE);
+  //   return;
+  // }
+  // if ((__HAL_UART_GET_FLAG(&huart1, UART_FLAG_IDLE) != RESET))
+  // {
+  //   __HAL_UART_DISABLE_IT(&huart1,UART_IT_IDLE);
+  //   if (usart1_status != USART_RECIEVE_OVERFLW)
+  //   {
+  //     // itm_printf("Again?");
+  //     usart1_status = USART_RECIEVE_PENDING;
+  //     if (RecievedPackage[RecievedPackagePos].len >=2 && RecievedPackage[RecievedPackagePos].s[0] == '+' && RecievedPackage[RecievedPackagePos].s[1] == 'I')
+  //     {
+  //       // xQueueSendFromISR(RecieveQueueHandle,&RecievedPackagePos,NULL);
+  //       xStreamBufferSendFromISR(RecieveQueueHandle,&RecievedPackagePos,sizeof(uint8_t),NULL);
+  //     }
+  //     else
+  //     {
+  //       // xQueueSendFromISR(ESP8266RetQueueHandle,&RecievedPackagePos,NULL);
+  //       xStreamBufferSendFromISR(ESP8266RetQueueHandle,&RecievedPackagePos,sizeof(uint8_t),NULL);
+  //     }
+  //     // itm_printf("No...\n");
+  //   }
+  //   else
+  //     usart1_status = USART_RECIEVE_PENDING;
+    
+  //   return;
+  // }
   /* USER CODE END USART1_IRQn 0 */
   HAL_UART_IRQHandler(&huart1);
   /* USER CODE BEGIN USART1_IRQn 1 */
