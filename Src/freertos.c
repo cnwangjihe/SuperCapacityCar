@@ -68,7 +68,7 @@ uint32_t adc1_7_res;
 uint8_t idHead,idTail;
 // ACKRequest ACKQueue[16];
 extern uint32_t NetworkTick;
-extern uint8_t ESP8266State, ESP8266Resend;
+extern uint8_t ESP8266State, ESP8266Resend, ESP8266ForceClear;
 extern uint8_t UDPState, NetworkState;
 // extern uint8_t recv_byte;
 SemaphoreHandle_t ACKSemaphore[128];
@@ -429,7 +429,7 @@ void StartNetworkRecieveTask(void const * argument)
       xSemaphoreGive(ACKSemaphore[id]);
       continue;
     }
-    len = header >> 9 & 0x3F;
+    len = (header >> 9 & 0x3F) << 3;
     qos = header >> 3 & 0x01;
     prt = header >> 15;
     itm_printf("%d:#%s#\n",rlen,raw);
@@ -580,11 +580,17 @@ void StartESP8266RetTask(void const * argument)
         if (ESP8266State == ESP8266_STATE_HEAD)
           xSemaphoreGive(ESP8266RetHandle);
         else
+        {
           itm_printf("OK > :state error:%d\n",ESP8266State);
+          ESP8266ForceClear = 1;
+        }
         state = ESP_NON;
       }
       else
+      {
         itm_printf("> :missing ESP_GOK:%d\n",state);
+        ESP8266ForceClear = 1;
+      }
     }
     else if (rlen-st >= 17 && strstr((char *)(raw+st), "ALREADY CONNECTED") != NULL)
     {
@@ -732,19 +738,22 @@ uint8_t SendUDPPackage(uint8_t op, uint8_t qos, char *data, size_t len)
   UDPRequest t;
   if (op>=(1<<3) || len>=(1<<6) || qos>=(1<<1))
     return NETWORK_SEND_FAILED;
-  uint16_t header = (qos << 3) | (op << 5) | (len << 9) | ((BitCount((uint8_t *)data, len)) << 15);
+  size_t plen = (((len & 0x7) != 0) + (len >> 3)) << 3;
+  uint16_t header = (qos << 3) | (op << 5) | ((plen >> 3) << 9) | ((BitCount((uint8_t *)data, len)) << 15);
   header = HammingPack(header);
   header = header | (__builtin_popcount(header) & 1);
   
   if (qos == QOS_ACK)
   {
-    raw = (uint8_t *)pvPortMalloc(len + 3);
+    raw = (uint8_t *)pvPortMalloc(plen + 3);
     uint8_t id = GetACKid();
     memcpy(raw,(uint8_t *)(&header),2);
     raw[2] = id | ((__builtin_popcount(id) & 1) << 7);
     if (len != 0)
       memcpy(raw+3,(uint8_t *)data,len);
-    len += 3;
+    if (len & 0x7)
+      memset(raw+3+len,0,plen-len);
+    len = plen + 3;
     t.id = id;
     // osMutexWait(ACKQueueMutexHandle, osWaitForever);
     // ACKQueue[ACKQueueTail].data = raw;
@@ -755,11 +764,13 @@ uint8_t SendUDPPackage(uint8_t op, uint8_t qos, char *data, size_t len)
   }
   else
   {
-    raw = (uint8_t *)pvPortMalloc(len + 2);
+    raw = (uint8_t *)pvPortMalloc(plen + 2);
     memcpy(raw,(uint8_t *)(&header),2);
     if (len != 0)
       memcpy(raw+2,(uint8_t *)data,len);
-    len += 2;
+    if (len & 0x7)
+      memset(raw+2+len,0,plen-len);
+    len = plen + 2;
     t.id = 0;
   }
   t.data = raw;

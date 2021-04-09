@@ -5,7 +5,6 @@ import coloredlogs
 import select
 import queue
 import random
-import time
 import zlib
 
 
@@ -88,7 +87,7 @@ def HammingUnpack(v):
 
 def CRC32(data):
     cnt = len(data)
-    if cnt%4 == 0:
+    if cnt % 4 == 0:
         cnt = 0
     else:
         cnt = 4-(cnt - int(cnt/4)*4)
@@ -175,7 +174,7 @@ def UDPServer():
             logging.error("rlen<2, drop")
             continue
         logging.debug(raw.hex())
-        header = raw[0] + raw[1]*0x100
+        header = raw[0] + (raw[1] << 8)
         header = HammingUnpack(header)
         # logging.debug(f"Before unpack: {bin(header)}")
         if popcount16(header) != 0:
@@ -197,7 +196,7 @@ def UDPServer():
                 pass  # ACK request resend NOT WORKING
             ACKok[Id].set()
             continue
-        cnt = header >> 9 & 0x3F
+        cnt = (header >> 9 & 0x3F) << 3
         qos = header >> 3 & 0x01
         prt = header >> 15
         if cnt + qos + 2 != rlen:
@@ -233,11 +232,11 @@ def UDPServer():
                 logging.warning(
                     f"Server recieve MotorSpeed cmd, speed: {int.from_bytes(raw,byteorder='little')}")
         elif op == 0x6:
-            if cnt != 2:
+            if cnt < 2:
                 logging.error("Recieve broken PING")
             else:
                 logging.info(
-                    f"Recieve PING, cap voltage:{int.from_bytes(raw,byteorder='little')/4096*3.3*5}")
+                    f"Recieve PING, cap voltage:{int.from_bytes(raw[0:2],byteorder='little')/4096*3.3*5}")
 
 
 popcountInit()
@@ -270,7 +269,8 @@ while True:
             logging.warning("speed too large (>65535)")
         data = v.to_bytes(2, byteorder="little")
         cnt = 2
-    header = (qos << 3) | (op << 5) | (cnt << 9) | (BitCount(data) << 15)
+    pcnt = ((cnt & 0xF !=0) + (cnt >> 3)) << 3
+    header = (qos << 3) | (op << 5) | ((pcnt >> 3) << 9) | (BitCount(data) << 15)
     header = HammingPack(header)
     header |= popcount16(header)
     logging.debug(bin(header))
@@ -282,7 +282,7 @@ while True:
                 logging.warning("ACK overflow")
             raw = header.to_bytes(2, byteorder="little") + \
                 (Id | (popcount8(Id) << 7)).to_bytes(
-                    1, byteorder="little") + data
+                    1, byteorder="little") + data + b'\0' * (pcnt - cnt)
             # ACK[Id].crc = CRC32(raw[3:]) # 17875c78
             ACK[Id].crc = CRC32(data)
             logging.debug(f"Mine:{ACK[Id].crc.hex()}")
