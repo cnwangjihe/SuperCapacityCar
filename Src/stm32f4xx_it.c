@@ -52,7 +52,7 @@
 // extern UARTPackage RecievedPackage[RECIEVE_QUEUE_MAX];
 // extern uint8_t RecievedPackagePos;
 extern MessageBufferHandle_t RecieveQueueHandle, ESP8266RetQueueHandle;
-// uint8_t usart1_status;
+uint8_t usart1_status;
 uint8_t BufferLen = 0;
 uint8_t Buffer[UART_BUF_SIZE];
 /* USER CODE END PV */
@@ -200,31 +200,54 @@ void USART1_IRQHandler(void)
 
   if ((__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE) != RESET))
   {
+    if (usart1_status == USART_RECIEVE_PENDING)
+    {
+      usart1_status = USART_RECIEVE_RUNNING;
+      __HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
+    }
     if (BufferLen == UART_BUF_SIZE)
     {
-      // usart1_status = USART_RECIEVE_OVERFLW;
+      usart1_status = USART_RECIEVE_OVERFLW;
       BufferLen = 0; // drop
+      if (Buffer[UART_BUF_SIZE-1]=='\r')
+        Buffer[BufferLen++] = '\r';
       itm_printf("Shit!Recived line tooooooo looooong\n");
     }
     Buffer[BufferLen++] = (uint8_t)(huart1.Instance->DR & (uint8_t)0x00FF);
+    // itm_printf("%02x#",Buffer[BufferLen-1]);
     if (BufferLen == 2 && Buffer[0]=='>' && Buffer[1]==' ')
     {
       xMessageBufferSendFromISR(ESP8266RetQueueHandle,Buffer,BufferLen,NULL);
+      usart1_status = USART_RECIEVE_RUNNING;
       BufferLen = 0;
     }
     else if (BufferLen > 1 && Buffer[BufferLen-2] == '\r' && Buffer[BufferLen-1] == '\n') // reach the end of line
     {
-      if (BufferLen > 2)
+      if (BufferLen > 2 && usart1_status != USART_RECIEVE_OVERFLW)
       {
         if (Buffer[0] == '+' && Buffer[1] == 'I')
           xMessageBufferSendFromISR(RecieveQueueHandle,Buffer,BufferLen-2,NULL);
         else
           xMessageBufferSendFromISR(ESP8266RetQueueHandle,Buffer,BufferLen-2,NULL);
       }
+      usart1_status = USART_RECIEVE_RUNNING;
       BufferLen = 0;
     }
     __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE);
     return ;
+  }
+  if ((__HAL_UART_GET_FLAG(&huart1, UART_FLAG_IDLE) != RESET))
+  {
+    __HAL_UART_DISABLE_IT(&huart1,UART_IT_IDLE);
+    if (BufferLen != 0 && usart1_status != USART_RECIEVE_OVERFLW)
+    {
+      if (BufferLen > 2 && Buffer[0] == '+' && Buffer[1] == 'I')
+        xMessageBufferSendFromISR(RecieveQueueHandle,Buffer,BufferLen,NULL);
+      else
+        itm_printf("Why?:#%.*s#\n",BufferLen,Buffer);
+    }
+    BufferLen = 0;
+    usart1_status = USART_RECIEVE_PENDING;
   }
 
   // if ((__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE) != RESET))

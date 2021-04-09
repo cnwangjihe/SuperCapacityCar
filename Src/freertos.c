@@ -497,9 +497,9 @@ void StartESP8266RetTask(void const * argument)
     if (rlen == 0)
       itm_printf("Weird, xMBR report buffer too small\n");
     raw[rlen]='\0';
-    for (uint8_t i = 0;i<rlen;i++)
-      itm_printf("%02x",raw[i]);
-    itm_printf("\n%d:@%s@\n",rlen,raw);
+    // for (uint8_t i = 0;i<rlen;i++)
+    //   itm_printf("%02x",raw[i]);
+    // itm_printf("\n%d:@%s@\n",rlen,raw);
     for (st=0;st < rlen && (raw[st]=='\n' || raw[st]=='\r' || raw[st]==' ');st++);
     if (rlen-st >= 15 && strstr((char *)(raw+st), "WIFI DISCONNECT") != NULL)
     {
@@ -522,20 +522,20 @@ void StartESP8266RetTask(void const * argument)
     else if (rlen-st >= 8 && strstr((char *)(raw+st), "+CWJAP:") != NULL)
     {
       state = ESP_CWJ;
-      itm_printf("state:ESP_CWJ\n");
+      // itm_printf("state:ESP_CWJ\n");
     }
     else if (rlen-st >= 4 && strstr((char *)(raw+st), "FAIL") != NULL)
     {
       if (state == ESP_CWJ)
       {
         NetworkState = NETWORK_NOT_READY;
-        itm_printf("Failed to connect to wifi...\n");
+        // itm_printf("Failed to connect to wifi...\n");
         if (ESP8266State == ESP8266_STATE_CNNT)
           xSemaphoreGive(ESP8266RetHandle);
         else
           itm_printf("CWJAP FAIL:state error:%d\n",ESP8266State);
         state = ESP_NON;
-        itm_printf("state:ESP_NON\n");
+        // itm_printf("state:ESP_NON\n");
       }
       else
         itm_printf("FAIL:missing ESP_CWJ:%d\n",state);
@@ -546,7 +546,7 @@ void StartESP8266RetTask(void const * argument)
       itm_printf("UDP connect failed...\n");
       if (ESP8266State == ESP8266_STATE_OPEN)
         xSemaphoreGive(ESP8266RetHandle);
-      else
+      // else
         itm_printf("no ip:state error:%d\n",ESP8266State);
     }
     else if (rlen-st >= 17 && strstr((char *)(raw+st), "link is not valid") != NULL)
@@ -555,8 +555,8 @@ void StartESP8266RetTask(void const * argument)
       itm_printf("UDP send failed...\n");
       if (ESP8266State == ESP8266_STATE_HEAD)
         xSemaphoreGive(ESP8266RetHandle);
-      else
-        itm_printf("link is not valid:state error:%d\n",ESP8266State);
+      // else
+      //   itm_printf("link is not valid:state error:%d\n",ESP8266State);
     }
     else if (rlen-st >= 2 && strstr((char *)(raw+st), "OK") != NULL)
     {
@@ -570,7 +570,7 @@ void StartESP8266RetTask(void const * argument)
       else
       {
         state = ESP_GOK;
-        itm_printf("state:ESP_GOK\n");
+        // itm_printf("state:ESP_GOK\n");
       }
     }
     else if (rlen-st >= 2 && strstr((char *)(raw+st), "> ") != NULL)

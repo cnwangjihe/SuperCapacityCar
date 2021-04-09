@@ -269,7 +269,9 @@ while True:
             logging.warning("speed too large (>65535)")
         data = v.to_bytes(2, byteorder="little")
         cnt = 2
-    pcnt = ((cnt & 0xF !=0) + (cnt >> 3)) << 3
+    pcnt = (((cnt & 0xF) != 0) + (cnt >> 3)) << 3
+    data += b'\0' * (pcnt - cnt)
+    logging.debug(f"cnt:{cnt}, pcnt:{pcnt}")
     header = (qos << 3) | (op << 5) | ((pcnt >> 3) << 9) | (BitCount(data) << 15)
     header = HammingPack(header)
     header |= popcount16(header)
@@ -282,7 +284,7 @@ while True:
                 logging.warning("ACK overflow")
             raw = header.to_bytes(2, byteorder="little") + \
                 (Id | (popcount8(Id) << 7)).to_bytes(
-                    1, byteorder="little") + data + b'\0' * (pcnt - cnt)
+                    1, byteorder="little") + data
             # ACK[Id].crc = CRC32(raw[3:]) # 17875c78
             ACK[Id].crc = CRC32(data)
             logging.debug(f"Mine:{ACK[Id].crc.hex()}")
