@@ -136,7 +136,7 @@ def ACKSingle(Id):
 
 
 def SendACKPackage(Id, resend, crc, server):
-    if id >= (1 << 7):
+    if Id >= (1 << 7):
         logging.error("ACK id too large")
         return
     header = (resend << 3) | (0x7 << 5) | (Id << 9)

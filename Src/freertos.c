@@ -26,6 +26,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+// #include "printf-stdarg.h"
+#include "retarget.h"
 #include <stdio.h>
 #include <string.h>
 #include "adc.h"
@@ -121,6 +123,7 @@ uint8_t SendUDPPackage(uint8_t op, uint8_t qos, char *data, size_t len);
 inline uint16_t HammingUnpack(uint16_t v);
 inline uint16_t HammingPack(uint16_t v);
 inline uint8_t GetACKid();
+void FreeACK(uint8_t id);
 void ACKSemaphoreInit();
 void StartSingleACKTask(void const * argument);
 /* USER CODE END FunctionPrototypes */
@@ -222,10 +225,10 @@ void MX_FREERTOS_Init(void) {
 
   // ESP8266RetQueueHandle = xQueueCreate(32, sizeof (uint8_t));
   // ESP8266RetQueueHandle = xStreamBufferCreate(32 * sizeof(uint8_t), sizeof(uint8_t));
-  ESP8266RetQueueHandle = xMessageBufferCreate(UART_BUF_SIZE * 8);
+  ESP8266RetQueueHandle = xMessageBufferCreate(UART_BUF_SIZE);
   
   // HAL_UART_Receive_IT(&huart1,&recv_byte,1);
-  itm_printf("InitHere!!!");
+  itm_printf("InitHere!!!\n");
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -344,8 +347,10 @@ void StartNetworkSendTask(void const * argument)
   for(;;)
   {
     xQueueReceive(SendQueueHandle,&t,portMAX_DELAY);
+    if (t.id!=0)
+      itm_printf("%d: %p, %d\n",t.id,t.data,ACKTimes[t.id]);
     // xStreamBufferReceive(SendQueueHandle,&t,sizeof(UDPRequest),portMAX_DELAY);
-    if (t.id)
+    if (t.id && ACKTimes[t.id] == 0)
     {
       if (ACK[t.id].id != 0)
       {
@@ -355,8 +360,12 @@ void StartNetworkSendTask(void const * argument)
       }
       ACK[t.id].data = t.data;
       ACK[t.id].len = t.len;
+      ACK[t.id].id = t.id;
       ACKcrc[t.id] = CRC32(t.data, t.len);
+      // itm_printf("Before create...\n");
       xTaskCreate((void *)StartSingleACKTask, NULL, 32, (void *)&t.id, osPriorityNormal, NULL);
+      // FreeACK(t.id);
+      // itm_printf("After create...\n");
     }
     // osMutexWait(ESP8266MutexHandle, osWaitForever);
     ESP8266Send(t.data, t.len);
@@ -381,23 +390,24 @@ void StartNetworkRecieveTask(void const * argument)
   /* Infinite loop */
   uint8_t op, qos, len, prt, id;
   size_t rlen,elen;
-  uint8_t *raw, *p;
-  raw = (uint8_t *)pvPortMalloc(UART_BUF_SIZE+1);
+  uint8_t *raw, *p, *praw;
+  praw = raw = (uint8_t *)pvPortMalloc(UART_BUF_SIZE+1);
   uint16_t header;
   uint32_t crc;
   for(;;)
   {
     // xQueueReceive(RecieveQueueHandle,&pos,portMAX_DELAY);
     // xStreamBufferReceive(RecieveQueueHandle,&pos,sizeof(uint8_t),portMAX_DELAY);
+    raw = praw;
     rlen = xMessageBufferReceive(RecieveQueueHandle,raw,UART_BUF_SIZE,portMAX_DELAY);
     if (rlen == 0)
       itm_printf("Weird, xMBR report buffer too small\n");
     raw[rlen]='\0';
     p = (uint8_t *)strchr((char *)raw, ':');
-    itm_printf("%d:#%s#\n",rlen,raw);
-    for (uint8_t i = 0;i<rlen;i++)
-      itm_printf("%02x",raw[i]);
-    itm_printf("\n");
+    // itm_printf("%d:#%s#\n",rlen,raw);
+    // for (uint8_t i = 0;i<rlen;i++)
+    //   itm_printf("%02x",raw[i]);
+    // itm_printf("\n");
     if (p == NULL) // unknown uart package type, drop
       continue;
     elen = 0;
@@ -421,11 +431,11 @@ void StartNetworkRecieveTask(void const * argument)
       // itm_printf("crc:%lX\n",crc);
       if (ACK[id].id == 0 || crc != ACKcrc[id]) // ACK no exist, drop
         continue;
-      if (header >> 3 & 1) // ACK request resend NOT WORKING
-      {
-        xQueueSend(SendQueueHandle,&ACK[id],pdMS_TO_TICKS(200)); // recieve resend ACK
-        // xStreamBufferSend(SendQueueHandle,&ACK[id],sizeof(UDPRequest),pdMS_TO_TICKS(200));
-      }
+      // if (header >> 3 & 1) // ACK request resend NOT WORKING
+      // {
+      //   xQueueSend(SendQueueHandle,&ACK[id],pdMS_TO_TICKS(200)); // recieve resend ACK
+      //   // xStreamBufferSend(SendQueueHandle,&ACK[id],sizeof(UDPRequest),pdMS_TO_TICKS(200));
+      // }
       xSemaphoreGive(ACKSemaphore[id]);
       continue;
     }
@@ -487,12 +497,14 @@ void StartESP8266RetTask(void const * argument)
   /* USER CODE BEGIN StartESP8266RetTask */
   /* Infinite loop */
   size_t rlen, st;
-  uint8_t *raw = (uint8_t *)pvPortMalloc(UART_BUF_SIZE+1);
+  uint8_t *raw, *praw;
+  praw = raw = (uint8_t *)pvPortMalloc(UART_BUF_SIZE+1);
   uint8_t state = ESP_NON;
   for(;;)
   {
     // xQueueReceive(ESP8266RetQueueHandle,&pos,portMAX_DELAY);
     // xStreamBufferReceive(ESP8266RetQueueHandle,&pos,sizeof(uint8_t),portMAX_DELAY);
+    raw = praw;
     rlen = xMessageBufferReceive(ESP8266RetQueueHandle,raw,UART_BUF_SIZE,portMAX_DELAY);
     if (rlen == 0)
       itm_printf("Weird, xMBR report buffer too small\n");
@@ -637,7 +649,9 @@ uint32_t CRC32(uint8_t *data,size_t len)
   if (len==0)
     return 0;
   size_t rlen = (len-1)/4+1;
+  itm_printf("%d\n",xPortGetFreeHeapSize());
   uint32_t *raw = (uint32_t *)pvPortMalloc(rlen*4);
+  itm_printf("%p\n",raw);
   raw[rlen-1] = 0;
   memcpy(raw,data,len);
   for (int i=0;i<rlen;i++)
@@ -650,7 +664,7 @@ uint32_t CRC32(uint8_t *data,size_t len)
 void FreeACK(uint8_t id)
 {
   vPortFree(ACK[id].data);
-  ACKTimes[id]=0;
+  ACKTimes[id] = 0;
   ACK[id].len = 0;
   ACK[id].id = 0;
 }
@@ -658,6 +672,8 @@ void FreeACK(uint8_t id)
 void StartSingleACKTask(void const * argument)
 {
   uint8_t id = *((uint8_t *)argument);
+  ACKTimes[id]++;
+  itm_printf("%d %d %p\n",ACK[id].id,ACK[id].len,ACK[id].data);
   if (xSemaphoreTake(ACKSemaphore[id],pdMS_TO_TICKS(1500)) != pdPASS)
   {
     if (ACKTimes[id]==ACK_MAX_RETRY)
@@ -670,9 +686,10 @@ void StartSingleACKTask(void const * argument)
       itm_printf("ACK array overflow!!(%d cleaned)\n",id);
       FreeACK(id);
     }
+    else
     {
       ACKTimes[id]++;
-      xQueueSend(SendQueueHandle,&ACK[id],pdMS_TO_TICKS(200));
+      xQueueSend(SendQueueHandle,&(ACK[id]),pdMS_TO_TICKS(200));
       // xStreamBufferSend(SendQueueHandle,&ACK[id],sizeof(UDPRequest),pdMS_TO_TICKS(200));
     }
   }
@@ -715,14 +732,19 @@ uint8_t SendACKPackage(uint8_t id, uint8_t resend, uint32_t crc)
   UDPRequest t;
   header = HammingPack(header);
   header = header | (__builtin_popcount(header) & 1);
+  itm_printf("%d\n",xPortGetFreeHeapSize());
   uint8_t *raw = (uint8_t *)pvPortMalloc(6);
+  itm_printf("%p\n",raw);
   memcpy(raw,&header,2);
   memcpy(raw+2,&crc,4);
   t.data = raw;
   t.len = 6;
   t.id = 0;
   if (xQueueSend(SendQueueHandle,&t,pdMS_TO_TICKS(100))!=pdPASS)
+  {
+    vPortFree(raw);
     return NETWORK_SEND_FAILED;
+  }
   // osMutexWait(ESP8266MutexHandle, osWaitForever);
   // ESP8266Send(raw,6);
   // osMutexRelease(ESP8266MutexHandle);
@@ -732,6 +754,7 @@ uint8_t SendACKPackage(uint8_t id, uint8_t resend, uint32_t crc)
 
 uint8_t SendUDPPackage(uint8_t op, uint8_t qos, char *data, size_t len)
 {
+  // itm_printf("Enter send\n");
   if (data!=NULL && len == 0xFFFF)
     len = strlen(data);
   uint8_t *raw;
@@ -745,7 +768,9 @@ uint8_t SendUDPPackage(uint8_t op, uint8_t qos, char *data, size_t len)
   
   if (qos == QOS_ACK)
   {
+    // itm_printf("%d\n",xPortGetFreeHeapSize());
     raw = (uint8_t *)pvPortMalloc(plen + 3);
+    // itm_printf("%p:%d %d\n",raw,len,plen);
     uint8_t id = GetACKid();
     memcpy(raw,(uint8_t *)(&header),2);
     raw[2] = id | ((__builtin_popcount(id) & 1) << 7);
@@ -764,7 +789,9 @@ uint8_t SendUDPPackage(uint8_t op, uint8_t qos, char *data, size_t len)
   }
   else
   {
+    // itm_printf("%d\n",xPortGetFreeHeapSize());
     raw = (uint8_t *)pvPortMalloc(plen + 2);
+    // itm_printf("%p\n",raw);
     memcpy(raw,(uint8_t *)(&header),2);
     if (len != 0)
       memcpy(raw+2,(uint8_t *)data,len);
@@ -775,12 +802,16 @@ uint8_t SendUDPPackage(uint8_t op, uint8_t qos, char *data, size_t len)
   }
   t.data = raw;
   t.len = len;
-  if (xQueueSend(SendQueueHandle,&t,pdMS_TO_TICKS(100))!=pdPASS)
   // if (xStreamBufferSend(SendQueueHandle,&t,sizeof(UDPRequest),pdMS_TO_TICKS(100))!=pdPASS)
+  if (xQueueSend(SendQueueHandle,&t,pdMS_TO_TICKS(100))!=pdPASS)
+  {
+    vPortFree(raw);
     return NETWORK_SEND_FAILED;
+  }
   // osMutexWait(ESP8266MutexHandle, osWaitForever);
   // ESP8266Send(raw,len);
   // osMutexRelease(ESP8266MutexHandle);
+  // itm_printf("Exit send\n");
   return NETWORK_SEND_OK;
 }
 

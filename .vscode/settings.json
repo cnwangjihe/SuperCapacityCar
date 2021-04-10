@@ -5,6 +5,7 @@
         "esp8266.h": "c",
         "freertos.h": "c",
         "cstdlib": "c",
-        "freertosconfig.h": "c"
+        "freertosconfig.h": "c",
+        "stdint.h": "c"
     }
 }
