@@ -262,7 +262,7 @@ void StartCapADCTask(void const * argument)
     {
       s[0] = (char)(adc1_7_res&0xFF);
       s[1] = (char)(adc1_7_res>>8);
-      SendUDPPackage(6,1,s,2);
+      SendUDPPackage(6,0,s,2);
     }
     osDelay(5);
   }
@@ -383,7 +383,7 @@ void StartNetworkRecieveTask(void const * argument)
     op  = header >> 5 & 0x07;
     if (op == 0x7) // recieve ACK
     {
-      if (rlen < 6) // ACK len error, drop
+      if (rlen != 6) // ACK len error, drop
         continue;
       id = header >> 9;
       crc = *((uint32_t *)(raw+2));
