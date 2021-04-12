@@ -6,6 +6,8 @@
         "freertos.h": "c",
         "cstdlib": "c",
         "freertosconfig.h": "c",
-        "stdint.h": "c"
+        "stdint.h": "c",
+        "message_buffer.h": "c",
+        "ssd1306.h": "c"
     }
 }

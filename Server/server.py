@@ -258,9 +258,9 @@ while True:
         while True:
             data = bytes(input("msg:"), encoding="utf-8")
             cnt = len(data)
-            if cnt < 0b1000000:
+            if cnt < 0b100000000:
                 break
-            logging.warning("msg too long (>63)")
+            logging.warning(f"msg too long (>{0b100000000-1})")
     elif op == 5:
         while True:
             v = int(input("speed:"))
