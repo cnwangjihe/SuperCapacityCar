@@ -19,7 +19,7 @@ ACK_MAX_RETRY = 3
 ACK_OVERFLOW = 0xFF
 PORT = 5555
 popcount_table = [0]*256
-sendLock = threading.Lock()
+SocketLock = threading.Lock()
 
 coloredlogs.install(level=logging.DEBUG, logger=logging.getLogger(),
                     fmt="%(asctime)s %(levelname)s %(message)s")
@@ -39,10 +39,6 @@ random.seed()
 ids = random.randrange(0, 0x80)
 status = 0
 addr = []
-
-client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-client.setblocking(True)
-client.bind(('0.0.0.0', PORT+1))
 
 
 def Getid():
@@ -116,7 +112,7 @@ def FreeACK(Id):
 
 
 def ACKSingle(Id):
-    global client, addr
+    global server, addr
     while True:
         if not ACKok[Id].wait(timeout=1.5):
             if ACKTimes[Id] == ACK_MAX_RETRY:
@@ -127,15 +123,16 @@ def ACKSingle(Id):
                 break
             else:
                 ACKTimes[Id] += 1
-                with sendLock:
-                    client.sendto(ACK[Id].raw, addr)
+                with SocketLock:
+                    server.sendto(ACK[Id].raw, addr)
         else:
             break
     logging.info(f"{Id} ACKed")
     FreeACK(Id)
 
 
-def SendACKPackage(Id, resend, crc, server):
+def SendACKPackage(Id, resend, crc):
+    global SocketLock, server, addr
     if Id >= (1 << 7):
         logging.error("ACK id too large")
         return
@@ -143,11 +140,12 @@ def SendACKPackage(Id, resend, crc, server):
     header = HammingPack(header)
     header = header | popcount16(header)
     raw = header.to_bytes(2, byteorder="little") + crc
-    server.sendto(raw, addr)
+    with SocketLock:
+        server.sendto(raw, addr)
 
 
 def UDPServer():
-    global addr, status
+    global addr, status, server
     server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server.bind(('0.0.0.0', PORT))
     server.setblocking(False)
@@ -155,17 +153,19 @@ def UDPServer():
     logging.info("Waiting client to connect...")
     while True:
         if status:
-            ready = select.select([server], [], [], 10)
-            if ready[0]:
-                raw, addr = server.recvfrom(0x200)
-            else:
-                status = 0
-                logging.info("Client heart beat timeout")
-                continue
+            with SocketLock:
+                ready = select.select([server], [], [], 10)
+                if ready[0]:
+                    raw, addr = server.recvfrom(0x200)
+                else:
+                    status = 0
+                    logging.info("Client heart beat timeout")
+                    continue
         else:
-            server.setblocking(True)
-            raw, addr = server.recvfrom(0x200)
-            server.setblocking(False)
+            with SocketLock:
+                server.setblocking(True)
+                raw, addr = server.recvfrom(0x200)
+                server.setblocking(False)
             status = 1
             online.set()
             logging.info("Client online")
@@ -213,7 +213,7 @@ def UDPServer():
                 continue
             crc = CRC32(raw[1:])
             Id &= 0x7F
-            SendACKPackage(Id, 0, crc, server)
+            SendACKPackage(Id, 0, crc)
             raw = raw[1:]
         if op == 0x0:
             logging.info(raw.decode("utf-8"))
@@ -293,7 +293,7 @@ while True:
             threading.Thread(target=ACKSingle, daemon=True, args=(Id,)).start()
         else:
             raw = header.to_bytes(2, byteorder="little") + data
-        with sendLock:
-            client.sendto(raw, addr)
+        with SocketLock:
+            server.sendto(raw, addr)
     else:
         logging.error("How slowly you typed, the client has flown away")

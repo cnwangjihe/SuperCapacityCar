@@ -47,6 +47,8 @@ void ESP8266Open()
     do{
         ESP8266Resend = 0;
         HAL_UART_Transmit(&huart1,(uint8_t *)"\r\n\r\n",4,200);
+        HAL_UART_Transmit(&huart1,(uint8_t *)ESP8266_UDP_CLOS,sizeof(ESP8266_UDP_CLOS)-1,200);
+        osDelay(700);
         HAL_UART_Transmit(&huart1,(uint8_t *)ESP8266_UDP_OPEN,sizeof(ESP8266_UDP_OPEN)-1,200);
         ITMassert(xSemaphoreTake(ESP8266RetHandle,pdMS_TO_TICKS(500)),"Open Semaphore Timeout");
     }while (ESP8266Resend);
