@@ -68,7 +68,7 @@ uint32_t adc1_7_res;
 // TM1637 dp;
 uint8_t idTail;
 extern uint32_t NetworkTick;
-extern uint8_t ESP8266State, ESP8266Resend, ESP8266ForceClear;
+extern uint8_t ESP8266State, ESP8266Res, ESP8266ForceClear;
 extern uint8_t UDPState, NetworkState;
 
 SemaphoreHandle_t ACKSemaphore[128];
@@ -531,8 +531,15 @@ void StartESP8266RetTask(void const * argument)
         NetworkState = NETWORK_READY;
         xSemaphoreGive(ESP8266RetHandle);
       }
+      else if (ESP8266State == ESP8266_STATE_CLOS)
+        xSemaphoreGive(ESP8266RetHandle);
       else
         state = ESP_GOK;
+    }
+    else if (rlen-st >= 5 && strstr((char *)(raw+st), "ERROR") != NULL)
+    {
+      if (ESP8266State == ESP8266_STATE_CLOS)
+        xSemaphoreGive(ESP8266RetHandle);
     }
     else if (rlen-st >= 2 && strstr((char *)(raw+st), "> ") != NULL)
     {
@@ -557,7 +564,8 @@ void StartESP8266RetTask(void const * argument)
     {
       if (ESP8266State == ESP8266_STATE_OPEN)
       {
-        UDPState = UDP_READY;
+        UDPState = UDP_NOT_READY;
+        ESP8266Res = ESP8266_RES_CLOS;
         xSemaphoreGive(ESP8266RetHandle);
       }
       else
@@ -582,7 +590,7 @@ void StartESP8266RetTask(void const * argument)
     }
     else if (((rlen-st >= 9 && strstr((char *)(raw+st), "busy p...") != NULL) || (rlen-st >= 9 && strstr((char *)(raw+st), "busy s...") != NULL)) && ESP8266State != ESP8266_STATE_IDLE)
     {
-      ESP8266Resend = 1;
+      ESP8266Res = ESP8266_RES_RSNT;
       xSemaphoreGive(ESP8266RetHandle);
     }
     osDelay(1);

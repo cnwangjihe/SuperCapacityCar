@@ -21,6 +21,11 @@
 #define ESP8266_STATE_OPEN 3
 #define ESP8266_STATE_HEAD 4
 #define ESP8266_STATE_SEND 5
+#define ESP8266_STATE_CLOS 6
+
+#define ESP8266_RES_NONE 0
+#define ESP8266_RES_RSNT 1
+#define ESP8266_RES_CLOS 2 
 
 void ESP8266Init();
 void ESP8266Connect();
