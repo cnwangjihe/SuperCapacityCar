@@ -388,6 +388,8 @@ void StartNetworkRecieveTask(void const * argument)
       id = header >> 9;
       crc = *((uint32_t *)(raw+2));
       // itm_printf("crc:%lX\n",crc);
+      if (id == 0)
+        continue;
       if (ACK[id].id == 0 || crc != ACKcrc[id]) // ACK no exist, drop
         continue;
       if (header >> 3 & 1) // ACK request resend NOT WORKING
@@ -411,6 +413,8 @@ void StartNetworkRecieveTask(void const * argument)
       if (__builtin_popcount(id) & 0x1) // id parity check failed, drop
         continue;
       id &= 0x7F;
+      if (id == 0)
+        continue;
       // itm_printf("%d %lX\n",id,crc);
       SendACKPackage(id,0,crc);
       raw += 1;

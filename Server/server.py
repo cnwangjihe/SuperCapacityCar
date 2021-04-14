@@ -44,6 +44,8 @@ addr = []
 def Getid():
     global ids
     ids = (ids+1) & 0x7F
+    if ids == 0:
+        ids = (ids+1) & 0x7F
     return ids
 
 
@@ -113,13 +115,16 @@ def FreeACK(Id):
 
 def ACKSingle(Id):
     global server, addr
+    flag = True
     while True:
         if not ACKok[Id].wait(timeout=1.5):
             if ACKTimes[Id] == ACK_MAX_RETRY:
                 logging.warning(f"{Id} reach ACK_MAX_RETRY time..\n")
+                flag = False
                 break
             elif ACKTimes[Id] == ACK_OVERFLOW:
                 logging.warning(f"ACK array overflow!!({Id} cleaned)\n")
+                flag = False
                 break
             else:
                 ACKTimes[Id] += 1
@@ -127,7 +132,8 @@ def ACKSingle(Id):
                     server.sendto(ACK[Id].raw, addr)
         else:
             break
-    logging.info(f"{Id} ACKed")
+    if flag:
+        logging.info(f"{Id} ACKed")
     FreeACK(Id)
 
 
@@ -185,6 +191,9 @@ def UDPServer():
                 continue
             crc = raw[2:6]
             logging.debug(f"Recieve CRC: {crc.hex()}")
+            if (Id == 0):
+                logging("ack id is zero, drop")
+                continue
             if (not ACK[Id].inuse) or (crc != ACK[Id].crc):
                 logging.error("ACK no exist, drop")
                 continue
@@ -209,6 +218,9 @@ def UDPServer():
                 continue
             crc = CRC32(raw[1:])
             Id &= 0x7F
+            if (Id == 0):
+                logging("package id is zero, drop")
+                continue
             SendACKPackage(Id, 0, crc)
             raw = raw[1:]
         if op == 0x0:
@@ -268,7 +280,8 @@ while True:
     pcnt = (((cnt & 0xF) != 0) + (cnt >> 3)) << 3
     data += b'\0' * (pcnt - cnt)
     logging.debug(f"cnt:{cnt}, pcnt:{pcnt}")
-    header = (qos << 3) | (op << 5) | ((pcnt >> 3) << 9) | (BitCount(data) << 15)
+    header = (qos << 3) | (op << 5) | (
+        (pcnt >> 3) << 9) | (BitCount(data) << 15)
     header = HammingPack(header)
     header |= popcount16(header)
     logging.debug(bin(header))
