@@ -42,7 +42,7 @@ extern "C" {
 //   size_t len;
 //   uint8_t id;
 // }ACKRequest;
-#define UART_BUF_SIZE 0x200
+#define UART_BUF_SIZE 0x280
 typedef struct {
 	uint8_t *data;
   size_t len;

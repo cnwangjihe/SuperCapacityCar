@@ -347,8 +347,8 @@ void StartNetworkRecieveTask(void const * argument)
 {
   /* USER CODE BEGIN StartNetworkRecieveTask */
   /* Infinite loop */
-  uint8_t op, qos, len, prt, id;
-  size_t rlen,elen;
+  uint8_t op, qos, prt, id;
+  size_t rlen,elen, len;
   uint8_t *raw, *p, *praw;
   praw = raw = (uint8_t *)pvPortMalloc(UART_BUF_SIZE+1);
   uint16_t header;
@@ -540,6 +540,11 @@ void StartESP8266RetTask(void const * argument)
       else
         state = ESP_GOK;
     }
+    else if (rlen-st >= 6 && strstr((char *)(raw+st), "CLOSED") != NULL)
+    {
+      if (ESP8266State == ESP8266_STATE_CLOS)
+        xSemaphoreGive(ESP8266RetHandle);
+    }
     else if (rlen-st >= 5 && strstr((char *)(raw+st), "ERROR") != NULL)
     {
       if (ESP8266State == ESP8266_STATE_CLOS)
@@ -594,9 +599,11 @@ void StartESP8266RetTask(void const * argument)
     }
     else if (((rlen-st >= 9 && strstr((char *)(raw+st), "busy p...") != NULL) || (rlen-st >= 9 && strstr((char *)(raw+st), "busy s...") != NULL)) && ESP8266State != ESP8266_STATE_IDLE)
     {
-      ESP8266Res = ESP8266_RES_RSNT;
+      // ESP8266Res = ESP8266_RES_RSNT;
       xSemaphoreGive(ESP8266RetHandle);
     }
+    else
+      itm_printf("unknow esp:#%s#\n",raw);
     osDelay(1);
   }
   /* USER CODE END StartESP8266RetTask */
@@ -744,7 +751,7 @@ uint8_t SendUDPPackage(uint8_t op, uint8_t qos, char *data, size_t len)
     len = strlen(data);
   uint8_t *raw;
   UDPRequest t;
-  if (op>=(1<<3) || len>=(1<<6) || qos>=(1<<1))
+  if (op>=(1<<3) || len>=(1<<9) || qos>=(1<<1))
     return NETWORK_SEND_FAILED;
   size_t plen = (((len & 0x7) != 0) + (len >> 3)) << 3;
   uint16_t header = (qos << 3) | (op << 5) | ((plen >> 3) << 9) | ((BitCount((uint8_t *)data, len)) << 15);

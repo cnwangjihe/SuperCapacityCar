@@ -53,7 +53,7 @@
 // extern uint8_t RecievedPackagePos;
 extern MessageBufferHandle_t RecieveQueueHandle, ESP8266RetQueueHandle;
 uint8_t usart1_status;
-uint8_t BufferLen = 0;
+size_t BufferLen = 0;
 uint8_t Buffer[UART_BUF_SIZE];
 /* USER CODE END PV */
 
