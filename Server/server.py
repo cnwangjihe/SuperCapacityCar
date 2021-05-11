@@ -128,6 +128,7 @@ class Server(threading.Thread):
             else:
                 break
         if flag:
+            self.logger.error("Hello from the client")
             self.logger.info(f"{Id} ACKed")
         self.FreeACK(Id)
 
@@ -233,7 +234,7 @@ class Server(threading.Thread):
                     self.logger.error("Recieve broken PING")
                 else:
                     self.logger.info(
-                        f"Recieve PING, cap voltage:{int.from_bytes(raw[0:2],byteorder='little')/4096*3.3*5}")
+                        f"Recieve PING, cap voltage:{round(int.from_bytes(raw[0:2],byteorder='little')/4096*3.3*5, 3)}V")
 
     def send(self, op, qos, data=b""):
         if isinstance(data, str):

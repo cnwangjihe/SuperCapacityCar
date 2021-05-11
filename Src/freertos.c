@@ -104,6 +104,7 @@ void MotorSpeed();
 uint8_t BitCount(uint8_t *data, size_t len);
 uint8_t SendACKPackage(uint8_t id, uint8_t resend, uint32_t crc);
 uint8_t SendUDPPackage(uint8_t op, uint8_t qos, char *data, size_t len);
+uint8_t SendAMGData(const AMGData * data,int qos);
 inline uint16_t HammingUnpack(uint16_t v);
 inline uint16_t HammingPack(uint16_t v);
 inline uint8_t GetACKid();
@@ -294,7 +295,7 @@ void StartChargerADCTask(void const * argument)
 * @retval None
 */
 /* USER CODE END Header_StartMotorTask */
-void StartMotorTask(void const * argument)
+__weak void StartMotorTask(void const * argument)
 {
   /* USER CODE BEGIN StartMotorTask */
   /* Infinite loop */
@@ -645,6 +646,40 @@ void StartNetworkCheckTask(void const * argument)
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
 
+void ChargerOn()
+{
+  if (adc1_7_res <= MAX_CAP_VOL * 1.0 * (1<<12) / 3.3 / 5)
+    HAL_GPIO_WritePin(ChargerCtrl_GPIO_Port,ChargerCtrl_Pin,GPIO_PIN_RESET);
+}
+void ChargerOff()
+{
+  
+  if (adc1_7_res >= MIN_CAP_VOL * 1.0 * (1<<12) / 3.3 / 5)
+    HAL_GPIO_WritePin(ChargerCtrl_GPIO_Port,ChargerCtrl_Pin,GPIO_PIN_SET);
+}
+void MotorStart() {}
+void MotorStop() {}
+void MotorSpeed() {}
+
+uint8_t SendAMGData(const AMGData * data,int qos)
+{
+  uint8_t *raw = pvPortMalloc(12 * 64 / 8);
+  uint8_t *p = raw;
+  uint16_t a,b;
+  uint8_t ret;
+  for (int i=0,j=1;i<64;i+=2,j+=2)
+  {
+    a = (data->data[i] & ((1<<12) - 1));
+    b = (data->data[j] & ((1<<12) - 1));
+    *(p++) = a & ((1<<8) - 1);
+    *(p++) = (a >> 8) || b & ((1<<4) - 1);
+    *(p++) = b >> 4;
+  }
+  ret = SendUDPPackage(1,0,(char *)raw,12 * 64 / 8);
+  vPortFree(raw);
+  return ret;
+}
+
 uint32_t CRC32(uint8_t *data,size_t len)
 {
   if (len==0)
@@ -698,21 +733,6 @@ void StartSingleACKTask(void const * argument)
   }
   vTaskDelete(NULL);
 }
-
-void ChargerOn()
-{
-  if (adc1_7_res <= MAX_CAP_VOL * 1.0 * (1<<12) / 3.3 / 5)
-    HAL_GPIO_WritePin(ChargerCtrl_GPIO_Port,ChargerCtrl_Pin,GPIO_PIN_RESET);
-}
-void ChargerOff()
-{
-  
-  if (adc1_7_res >= MIN_CAP_VOL * 1.0 * (1<<12) / 3.3 / 5)
-    HAL_GPIO_WritePin(ChargerCtrl_GPIO_Port,ChargerCtrl_Pin,GPIO_PIN_SET);
-}
-void MotorStart() {}
-void MotorStop() {}
-void MotorSpeed() {}
 
 uint8_t BitCount(uint8_t *data, size_t len)
 {

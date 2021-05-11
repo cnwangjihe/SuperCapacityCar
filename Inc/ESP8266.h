@@ -1,11 +1,5 @@
 // #include "printf-stdarg.h"
-#include <stdio.h>
-#include <string.h>
-#include "usart.h"
-#include "FreeRTOS.h"
-#include "task.h"
 #include "main.h"
-#include "cmsis_os.h"
 
 #define ESP8266_UDP_HEAD "AT+CIPSENDEX="
 #define ESP8266_UDP_TAIL "+++\r\n"

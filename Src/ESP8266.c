@@ -1,4 +1,10 @@
 #include "ESP8266.h"
+#include <stdio.h>
+#include <string.h>
+#include "usart.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include "cmsis_os.h"
 
 extern osSemaphoreId ESP8266RetHandle;
 uint8_t UDPState, NetworkState;

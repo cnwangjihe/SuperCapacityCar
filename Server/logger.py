@@ -11,7 +11,7 @@ class Logger:
         self.formatter = logging.Formatter(
             '[%(asctime)s][%(levelname)s]: %(message)s')
         st = time.time()
-        self.level = logging.DEBUG
+        self.level = logging.INFO
         self.logger = logging.getLogger("Logger")
         if (not usefile) and (not usestdout):
             self.info = self._none

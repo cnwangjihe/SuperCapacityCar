@@ -9,6 +9,7 @@
         "stdint.h": "c",
         "message_buffer.h": "c",
         "ssd1306.h": "c",
-        "task.h": "c"
+        "task.h": "c",
+        "main.h": "c"
     }
 }
