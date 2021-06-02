@@ -5,97 +5,106 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "cmsis_os.h"
+#include "stream_buffer.h"
 
-extern osSemaphoreId ESP8266RetHandle;
+extern osSemaphoreId ESPRetHandle;
 uint8_t UDPState, NetworkState;
-uint8_t ESP8266State, ESP8266Res, ESP8266ForceClear;
+uint8_t ESPState, ESPRes, ESPForceClear;
+uint8_t ESPSPIState;
+StreamBufferHandle_t SPISendBuffer,SPIReceiveBuffer;
 
-void ESP8266Clear()
+void ESPClear()
 {
-    if (!ESP8266ForceClear)
+    if (!ESPForceClear)
         return ;
     itm_printf("Force clear triggered!\n");
-    HAL_UART_Transmit(&huart1,(uint8_t *)"\r\n\r\n",4,200);
-    HAL_UART_Transmit(&huart1,(uint8_t *)ESP8266_UDP_MAXL,sizeof(ESP8266_UDP_MAXL)-1,200);
-    HAL_UART_Transmit(&huart1,(uint8_t *)"\r\n\r\n",4,200);
-    ESP8266ForceClear = 0;
+    HAL_UART_Transmit(&huart1,(uint8_t *)"\r\n\r\n\r\n\r\n",8,1000);
+    // itm_printf("@@%.*s@@",sizeof(ESP_UDP_MAXL)-1,ESP_UDP_MAXL);
+    HAL_UART_Transmit(&huart1,(uint8_t *)ESP_UDP_MAXL,sizeof(ESP_UDP_MAXL)-1,1000);
+    HAL_UART_Transmit(&huart1,(uint8_t *)"\r\n\r\n\r\n\r\n",8,1000);
+    ESPForceClear = 0;
 }
 
-void ESP8266Connect()
+void ESPConnect()
 {
-    ESP8266Clear();
-    ESP8266State = ESP8266_STATE_CNNT;
+    ESPClear();
+    ESPState = ESP_STATE_CNNT;
     do{
-        HAL_UART_Transmit(&huart1,(uint8_t *)ESP8266_WIFI_CON,sizeof(ESP8266_WIFI_CON)-1,200);
-        ITMassert(xSemaphoreTake(ESP8266RetHandle,pdMS_TO_TICKS(10000)),"Connet Semaphore Timeout\n");
-    }while (ESP8266Res == ESP8266_RES_RSNT);
-    ESP8266State = ESP8266_STATE_IDLE;
+        HAL_UART_Transmit(&huart1,(uint8_t *)ESP_WIFI_CON,sizeof(ESP_WIFI_CON)-1,1000);
+        ITMassert(xSemaphoreTake(ESPRetHandle,pdMS_TO_TICKS(10000)),"Connect Semaphore Timeout\n");
+    }while (ESPRes == ESP_RES_RSNT);
+    ESPState = ESP_STATE_IDLE;
 }
 
-void ESP8266Init()
+void ESPInit()
 {
-    ESP8266Clear();
-    ESP8266State = ESP8266_STATE_INIT;
+    ESPForceClear = 1;
+    ESPClear();
+    ESPState = ESP_STATE_INIT;
     do{
-        HAL_UART_Transmit(&huart1,(uint8_t *)ESP8266_WIFI_DIS,sizeof(ESP8266_WIFI_DIS)-1,200);
-        ITMassert(xSemaphoreTake(ESP8266RetHandle,pdMS_TO_TICKS(500)),"Init Semaphore Timeout\n");
-    }while (ESP8266Res == ESP8266_RES_RSNT);
-    ESP8266State = ESP8266_STATE_IDLE;
+        HAL_UART_Transmit(&huart1,(uint8_t *)ESP_WIFI_DIS,sizeof(ESP_WIFI_DIS)-1,1000);
+        ITMassert(xSemaphoreTake(ESPRetHandle,pdMS_TO_TICKS(500)),"Init Semaphore Timeout\n");
+    }while (ESPRes == ESP_RES_RSNT);
+    ESPState = ESP_STATE_IDLE;
 }
 
-void ESP8266Close()
+void ESPClose()
 {
-    ESP8266Clear();
-    ESP8266State = ESP8266_STATE_CLOS;
+    ESPClear();
+    ESPState = ESP_STATE_CLOS;
     do{
-        ESP8266Res = ESP8266_RES_NONE;
-        HAL_UART_Transmit(&huart1,(uint8_t *)ESP8266_UDP_CLOS,sizeof(ESP8266_UDP_CLOS)-1,200);
-        ITMassert(xSemaphoreTake(ESP8266RetHandle,pdMS_TO_TICKS(500)),"Close Semaphore Timeout\n");
-    }while (ESP8266Res == ESP8266_RES_RSNT);
-    ESP8266State = ESP8266_STATE_IDLE;
+        ESPRes = ESP_RES_NONE;
+        HAL_UART_Transmit(&huart1,(uint8_t *)ESP_UDP_CLOS,sizeof(ESP_UDP_CLOS)-1,1000);
+        ITMassert(xSemaphoreTake(ESPRetHandle,pdMS_TO_TICKS(500)),"Close Semaphore Timeout\n");
+    }while (ESPRes == ESP_RES_RSNT);
+    ESPState = ESP_STATE_IDLE;
 }
 
-void ESP8266Open()
+void ESPOpen()
 {
-    ESP8266Clear();
-    ESP8266State = ESP8266_STATE_OPEN;
+    ESPClear();
+    ESPState = ESP_STATE_OPEN;
     do{
-        ESP8266Res = ESP8266_RES_NONE;
-        HAL_UART_Transmit(&huart1,(uint8_t *)ESP8266_UDP_OPEN,sizeof(ESP8266_UDP_OPEN)-1,200);
-        ITMassert(xSemaphoreTake(ESP8266RetHandle,pdMS_TO_TICKS(500)),"Open Semaphore Timeout\n");
-        if (ESP8266Res == ESP8266_RES_CLOS)
-            ESP8266Close();
-    }while (ESP8266Res == ESP8266_RES_RSNT);
-    ESP8266State = ESP8266_STATE_IDLE;
+        ESPRes = ESP_RES_NONE;
+        HAL_UART_Transmit(&huart1,(uint8_t *)ESP_UDP_OPEN,sizeof(ESP_UDP_OPEN)-1,1000);
+        ITMassert(xSemaphoreTake(ESPRetHandle,pdMS_TO_TICKS(500)),"Open Semaphore Timeout\n");
+        if (ESPRes == ESP_RES_CLOS)
+            ESPClose();
+    }while (ESPRes == ESP_RES_RSNT);
+    ESPState = ESP_STATE_IDLE;
 }
 
-void ESP8266SendHead(size_t len)
+uint8_t ESPSendHead(size_t len)
 {
-    ESP8266Clear();
+    uint8_t ret;
+    ESPClear();
     char tmp[8];
     sprintf(tmp,"%d\r\n",len);
-    ESP8266State = ESP8266_STATE_HEAD;
+    ESPState = ESP_STATE_HEAD;
     do{
-        ESP8266Res = ESP8266_RES_NONE;
-        HAL_UART_Transmit(&huart1,(uint8_t *)ESP8266_UDP_HEAD,sizeof(ESP8266_UDP_HEAD)-1,200);
-        HAL_UART_Transmit(&huart1,(uint8_t *)tmp,strlen(tmp),200);
-        ITMassert(xSemaphoreTake(ESP8266RetHandle,pdMS_TO_TICKS(5000)),"SendHead Semaphore Timeout\n");
-    }while (ESP8266Res == ESP8266_RES_RSNT);
-    ESP8266State = ESP8266_STATE_IDLE;
+        ESPRes = ESP_RES_NONE;
+        HAL_UART_Transmit(&huart1,(uint8_t *)ESP_UDP_HEAD,sizeof(ESP_UDP_HEAD)-1,1000);
+        HAL_UART_Transmit(&huart1,(uint8_t *)tmp,strlen(tmp),2000);
+        ret = xSemaphoreTake(ESPRetHandle,pdMS_TO_TICKS(2000));
+        ITMassert(ret,"SendHead Semaphore Timeout\n");
+    }while (ESPRes == ESP_RES_RSNT);
+    ESPState = ESP_STATE_IDLE;
+    return ret;
 }
 
-void ESP8266Send(uint8_t *data, size_t len)
+void ESPSend(uint8_t *data, size_t len)
 {
     if (NetworkState != NETWORK_READY || UDPState != UDP_READY)
         return ;
-    ESP8266Clear();
-    ESP8266SendHead(len);
-    ESP8266State = ESP8266_STATE_SEND;
+    ESPClear();
+    if (!ESPSendHead(len))
+        return;
+    ESPState = ESP_STATE_SEND;
     do{
-        ESP8266Res = ESP8266_RES_NONE;
-        HAL_UART_Transmit(&huart1,data,len,800);
-        ITMassert(xSemaphoreTake(ESP8266RetHandle,pdMS_TO_TICKS(100)),"Send Semaphore Timeout\n");
-    }while (ESP8266Res == ESP8266_RES_RSNT);
-    ESP8266State = ESP8266_STATE_IDLE;
-    // ESP8266Close();
+        ESPRes = ESP_RES_NONE;
+        HAL_UART_Transmit(&huart1,data,len,2000);
+        ITMassert(xSemaphoreTake(ESPRetHandle,pdMS_TO_TICKS(2000)),"Send Semaphore Timeout\n");
+    }while (ESPRes == ESP_RES_RSNT);
+    ESPState = ESP_STATE_IDLE;
+    // ESPClose();
 }

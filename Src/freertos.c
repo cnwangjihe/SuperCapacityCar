@@ -68,7 +68,7 @@ uint32_t adc1_7_res;
 // TM1637 dp;
 uint8_t idTail;
 extern uint32_t NetworkTick;
-extern uint8_t ESP8266State, ESP8266Res, ESP8266ForceClear;
+extern uint8_t ESPState, ESPRes, ESPForceClear;
 extern uint8_t UDPState, NetworkState;
 
 SemaphoreHandle_t ACKSemaphore[128];
@@ -77,21 +77,21 @@ UDPRequest ACK[128];
 uint32_t ACKcrc[128];
 
 QueueHandle_t SendQueueHandle;
-MessageBufferHandle_t RecieveQueueHandle;
-MessageBufferHandle_t ESP8266RetQueueHandle;
+MessageBufferHandle_t ReceiveQueueHandle;
+MessageBufferHandle_t ESPRetQueueHandle;
 
 /* USER CODE END Variables */
 osThreadId CapADCTaskHandle;
 osThreadId ChargerADCTaskHandle;
 osThreadId MotorTaskHandle;
 osThreadId NetworkSendTaskHandle;
-osThreadId NetworkRecieveTHandle;
-osThreadId ESP8266RetTaskHandle;
+osThreadId NetworkReceiveTHandle;
+osThreadId ESPRetTaskHandle;
 osThreadId NetworkCheckTasHandle;
 osMutexId ACKQueueMutexHandle;
-osMutexId ESP8266MutexHandle;
+osMutexId ESPMutexHandle;
 osMutexId UDPSendMutexHandle;
-osSemaphoreId ESP8266RetHandle;
+osSemaphoreId ESPRetHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -103,7 +103,7 @@ void MotorStop();
 void MotorSpeed();
 uint8_t BitCount(uint8_t *data, size_t len);
 uint8_t SendACKPackage(uint8_t id, uint8_t resend, uint32_t crc);
-uint8_t SendUDPPackage(uint8_t op, uint8_t qos, char *data, size_t len);
+uint8_t SendUDPPackage(uint8_t op, uint8_t qos, uint8_t *data, size_t len);
 uint8_t SendAMGData(const AMGData * data,int qos);
 inline uint16_t HammingUnpack(uint16_t v);
 inline uint16_t HammingPack(uint16_t v);
@@ -117,8 +117,8 @@ void StartCapADCTask(void const * argument);
 void StartChargerADCTask(void const * argument);
 void StartMotorTask(void const * argument);
 void StartNetworkSendTask(void const * argument);
-void StartNetworkRecieveTask(void const * argument);
-void StartESP8266RetTask(void const * argument);
+void StartNetworkReceiveTask(void const * argument);
+void StartESPRetTask(void const * argument);
 void StartNetworkCheckTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -168,9 +168,9 @@ void MX_FREERTOS_Init(void) {
   osMutexDef(ACKQueueMutex);
   ACKQueueMutexHandle = osMutexCreate(osMutex(ACKQueueMutex));
 
-  /* definition and creation of ESP8266Mutex */
-  osMutexDef(ESP8266Mutex);
-  ESP8266MutexHandle = osMutexCreate(osMutex(ESP8266Mutex));
+  /* definition and creation of ESPMutex */
+  osMutexDef(ESPMutex);
+  ESPMutexHandle = osMutexCreate(osMutex(ESPMutex));
 
   /* definition and creation of UDPSendMutex */
   osMutexDef(UDPSendMutex);
@@ -180,12 +180,12 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_MUTEX */
 
   /* Create the semaphores(s) */
-  /* definition and creation of ESP8266Ret */
-  osSemaphoreDef(ESP8266Ret);
-  ESP8266RetHandle = osSemaphoreCreate(osSemaphore(ESP8266Ret), 1);
+  /* definition and creation of ESPRet */
+  osSemaphoreDef(ESPRet);
+  ESPRetHandle = osSemaphoreCreate(osSemaphore(ESPRet), 1);
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
-  xSemaphoreTake(ESP8266RetHandle,portMAX_DELAY);
+  xSemaphoreTake(ESPRetHandle,portMAX_DELAY);
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
@@ -197,8 +197,8 @@ void MX_FREERTOS_Init(void) {
   
   SendQueueHandle = xQueueCreate(16, sizeof (UDPRequest));
 
-  RecieveQueueHandle = xMessageBufferCreate(UART_BUF_SIZE * 8);
-  ESP8266RetQueueHandle = xMessageBufferCreate(UART_BUF_SIZE);
+  ReceiveQueueHandle = xMessageBufferCreate(UART_BUF_SIZE * 8);
+  ESPRetQueueHandle = xMessageBufferCreate(UART_BUF_SIZE);
   
   // HAL_UART_Receive_IT(&huart1,&recv_byte,1);
   itm_printf("InitHere!!!\n");
@@ -221,13 +221,13 @@ void MX_FREERTOS_Init(void) {
   osThreadDef(NetworkSendTask, StartNetworkSendTask, osPriorityLow, 0, 128);
   NetworkSendTaskHandle = osThreadCreate(osThread(NetworkSendTask), NULL);
 
-  /* definition and creation of NetworkRecieveT */
-  osThreadDef(NetworkRecieveT, StartNetworkRecieveTask, osPriorityBelowNormal, 0, 128);
-  NetworkRecieveTHandle = osThreadCreate(osThread(NetworkRecieveT), NULL);
+  /* definition and creation of NetworkReceiveT */
+  osThreadDef(NetworkReceiveT, StartNetworkReceiveTask, osPriorityBelowNormal, 0, 128);
+  NetworkReceiveTHandle = osThreadCreate(osThread(NetworkReceiveT), NULL);
 
-  /* definition and creation of ESP8266RetTask */
-  osThreadDef(ESP8266RetTask, StartESP8266RetTask, osPriorityBelowNormal, 0, 128);
-  ESP8266RetTaskHandle = osThreadCreate(osThread(ESP8266RetTask), NULL);
+  /* definition and creation of ESPRetTask */
+  osThreadDef(ESPRetTask, StartESPRetTask, osPriorityBelowNormal, 0, 128);
+  ESPRetTaskHandle = osThreadCreate(osThread(ESPRetTask), NULL);
 
   /* definition and creation of NetworkCheckTas */
   osThreadDef(NetworkCheckTas, StartNetworkCheckTask, osPriorityNormal, 0, 128);
@@ -249,10 +249,21 @@ void MX_FREERTOS_Init(void) {
 void StartCapADCTask(void const * argument)
 {
   /* USER CODE BEGIN StartCapADCTask */
-  char s[2];
+  uint8_t s[2];
   HAL_ADC_Start_DMA(&hadc1,&adc1_7_res,1);
   HAL_TIM_Base_Start(&htim3);
   /* Infinite loop */
+  
+  //speed test
+  uint8_t *raw = (uint8_t *)pvPortMalloc(500);
+  memset(raw,'a',500);
+  for (;;)
+  {
+    SendUDPPackage(0,0,raw,500);
+    // osDelay(40);
+  }
+  //speed test
+
   for(uint8_t i=1;1;i++)
   {
     if (adc1_7_res > MAX_CAP_VOL * 1.0 * (1<<12) / 3.3 / 5)
@@ -261,8 +272,8 @@ void StartCapADCTask(void const * argument)
       ChargerOn();
     if (!i)
     {
-      s[0] = (char)(adc1_7_res&0xFF);
-      s[1] = (char)(adc1_7_res>>8);
+      s[0] = (uint8_t)(adc1_7_res&0xFF);
+      s[1] = (uint8_t)(adc1_7_res>>8);
       SendUDPPackage(6,0,s,2);
     }
     osDelay(5);
@@ -325,10 +336,10 @@ void StartNetworkSendTask(void const * argument)
     //   itm_printf("%d: %p, %d\n",t.id,t.data,ACKTimes[t.id]);
     if (t.id)
       xTaskCreate((void *)StartSingleACKTask, NULL, 128, (void *)&t.id, osPriorityNormal, NULL);
-    if (xSemaphoreTake(ESP8266MutexHandle,pdMS_TO_TICKS(700)) == pdPASS)
+    if (xSemaphoreTake(ESPMutexHandle,pdMS_TO_TICKS(700)) == pdPASS)
     {
-      ESP8266Send(t.data, t.len);
-      xSemaphoreGive(ESP8266MutexHandle);
+      ESPSend(t.data, t.len);
+      xSemaphoreGive(ESPMutexHandle);
     }
     if (!t.id)
       vPortFree(t.data);
@@ -337,16 +348,16 @@ void StartNetworkSendTask(void const * argument)
   /* USER CODE END StartNetworkSendTask */
 }
 
-/* USER CODE BEGIN Header_StartNetworkRecieveTask */
+/* USER CODE BEGIN Header_StartNetworkReceiveTask */
 /**
-* @brief Function implementing the NetworkRecieveT thread.
+* @brief Function implementing the NetworkReceiveT thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_StartNetworkRecieveTask */
-void StartNetworkRecieveTask(void const * argument)
+/* USER CODE END Header_StartNetworkReceiveTask */
+void StartNetworkReceiveTask(void const * argument)
 {
-  /* USER CODE BEGIN StartNetworkRecieveTask */
+  /* USER CODE BEGIN StartNetworkReceiveTask */
   /* Infinite loop */
   uint8_t op, qos, prt, id;
   size_t rlen,elen, len;
@@ -356,10 +367,10 @@ void StartNetworkRecieveTask(void const * argument)
   uint32_t crc;
   for(;;)
   {
-    // xQueueReceive(RecieveQueueHandle,&pos,portMAX_DELAY);
-    // xStreamBufferReceive(RecieveQueueHandle,&pos,sizeof(uint8_t),portMAX_DELAY);
+    // xQueueReceive(ReceiveQueueHandle,&pos,portMAX_DELAY);
+    // xStreamBufferReceive(ReceiveQueueHandle,&pos,sizeof(uint8_t),portMAX_DELAY);
     raw = praw;
-    rlen = xMessageBufferReceive(RecieveQueueHandle,raw,UART_BUF_SIZE,portMAX_DELAY);
+    rlen = xMessageBufferReceive(ReceiveQueueHandle,raw,UART_BUF_SIZE,portMAX_DELAY);
     if (rlen == 0)
       itm_printf("Weird, xMBR report buffer too small\n");
     raw[rlen]='\0';
@@ -382,7 +393,7 @@ void StartNetworkRecieveTask(void const * argument)
     if (__builtin_popcount(header) & 1) // header check failed, drop package
       continue;
     op  = header >> 5 & 0x07;
-    if (op == 0x7) // recieve ACK
+    if (op == 0x7) // receive ACK
     {
       if (rlen != 6) // ACK len error, drop
         continue;
@@ -394,7 +405,7 @@ void StartNetworkRecieveTask(void const * argument)
       if (ACK[id].id == 0 || crc != ACKcrc[id]) // ACK no exist, drop
         continue;
       if (header >> 3 & 1) // ACK request resend NOT WORKING
-        xQueueSend(SendQueueHandle,&ACK[id],pdMS_TO_TICKS(200)); // recieve resend ACK
+        xQueueSend(SendQueueHandle,&ACK[id],pdMS_TO_TICKS(200)); // receive resend ACK
       xSemaphoreGive(ACKSemaphore[id]);
       continue;
     }
@@ -422,7 +433,7 @@ void StartNetworkRecieveTask(void const * argument)
     }
     raw += 2;
     if (op == 0x0)
-      itm_printf("Recieve: #%s#\n",raw);
+      itm_printf("Receive: #%s#\n",raw);
     else if (op == 0x1)
       MotorStop();
     else if (op == 0x2)
@@ -443,19 +454,19 @@ void StartNetworkRecieveTask(void const * argument)
     }
     osDelay(1);
   }
-  /* USER CODE END StartNetworkRecieveTask */
+  /* USER CODE END StartNetworkReceiveTask */
 }
 
-/* USER CODE BEGIN Header_StartESP8266RetTask */
+/* USER CODE BEGIN Header_StartESPRetTask */
 /**
-* @brief Function implementing the ESP8266RetTask thread.
+* @brief Function implementing the ESPRetTask thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_StartESP8266RetTask */
-void StartESP8266RetTask(void const * argument)
+/* USER CODE END Header_StartESPRetTask */
+void StartESPRetTask(void const * argument)
 {
-  /* USER CODE BEGIN StartESP8266RetTask */
+  /* USER CODE BEGIN StartESPRetTask */
   /* Infinite loop */
   size_t rlen, st;
   uint8_t *raw, *praw;
@@ -464,7 +475,7 @@ void StartESP8266RetTask(void const * argument)
   for(;;)
   {
     raw = praw;
-    rlen = xMessageBufferReceive(ESP8266RetQueueHandle,raw,UART_BUF_SIZE,portMAX_DELAY);
+    rlen = xMessageBufferReceive(ESPRetQueueHandle,raw,UART_BUF_SIZE,portMAX_DELAY);
     if (rlen == 0)
       itm_printf("Weird, xMBR report buffer too small\n");
     raw[rlen]='\0';
@@ -493,121 +504,132 @@ void StartESP8266RetTask(void const * argument)
       state = ESP_CWJ;
       // itm_printf("state:ESP_CWJ\n");
     }
+    else if (rlen-st >= 9 && strstr((char *)(raw+st), "SEND FAIL") != NULL)
+      itm_printf("Send Fail\n");
     else if (rlen-st >= 4 && strstr((char *)(raw+st), "FAIL") != NULL)
     {
       if (state == ESP_CWJ)
       {
         NetworkState = NETWORK_NOT_READY;
         itm_printf("Failed to connect to wifi...\n");
-        if (ESP8266State == ESP8266_STATE_CNNT)
-          xSemaphoreGive(ESP8266RetHandle);
+        if (ESPState == ESP_STATE_CNNT)
+          xSemaphoreGive(ESPRetHandle);
         else
-          itm_printf("CWJAP FAIL:state error:%d\n",ESP8266State);
+          itm_printf("CWJAP FAIL:state error:%d\n",ESPState);
         state = ESP_NON;
         // itm_printf("state:ESP_NON\n");
       }
       else
+      {
         itm_printf("FAIL:missing ESP_CWJ:%d\n",state);
+        NetworkState = NETWORK_NOT_READY;
+      }
     }
     else if (rlen-st >= 5 && strstr((char *)(raw+st), "no ip") != NULL)
     {
       UDPState = UDP_NOT_READY;
       itm_printf("UDP connect failed...\n");
-      if (ESP8266State == ESP8266_STATE_OPEN)
-        xSemaphoreGive(ESP8266RetHandle);
+      if (ESPState == ESP_STATE_OPEN)
+        xSemaphoreGive(ESPRetHandle);
       else
-        itm_printf("no ip:state error:%d\n",ESP8266State);
+        itm_printf("no ip:state error:%d\n",ESPState);
     }
     else if (rlen-st >= 17 && strstr((char *)(raw+st), "link is not valid") != NULL)
     {
       UDPState = UDP_NOT_READY;
       itm_printf("UDP send failed...\n");
-      if (ESP8266State == ESP8266_STATE_HEAD)
-        xSemaphoreGive(ESP8266RetHandle);
+      if (ESPState == ESP_STATE_HEAD)
+        xSemaphoreGive(ESPRetHandle);
       else
-        itm_printf("link is not valid:state error:%d\n",ESP8266State);
+        itm_printf("link is not valid:state error:%d\n",ESPState);
     }
     else if (rlen-st >= 2 && strstr((char *)(raw+st), "OK") != NULL)
     {
-      if (ESP8266State == ESP8266_STATE_INIT)
-        xSemaphoreGive(ESP8266RetHandle);
-      else if (ESP8266State == ESP8266_STATE_CNNT)
+      if (ESPState == ESP_STATE_INIT)
+        xSemaphoreGive(ESPRetHandle);
+      else if (ESPState == ESP_STATE_CNNT)
       {
         NetworkState = NETWORK_READY;
-        xSemaphoreGive(ESP8266RetHandle);
+        xSemaphoreGive(ESPRetHandle);
       }
-      else if (ESP8266State == ESP8266_STATE_CLOS)
-        xSemaphoreGive(ESP8266RetHandle);
+      else if (ESPState == ESP_STATE_CLOS)
+        xSemaphoreGive(ESPRetHandle);
       else
         state = ESP_GOK;
     }
     else if (rlen-st >= 6 && strstr((char *)(raw+st), "CLOSED") != NULL)
     {
-      if (ESP8266State == ESP8266_STATE_CLOS)
-        xSemaphoreGive(ESP8266RetHandle);
+      if (ESPState == ESP_STATE_CLOS)
+        xSemaphoreGive(ESPRetHandle);
     }
     else if (rlen-st >= 5 && strstr((char *)(raw+st), "ERROR") != NULL)
     {
-      if (ESP8266State == ESP8266_STATE_CLOS)
-        xSemaphoreGive(ESP8266RetHandle);
+      if (ESPState == ESP_STATE_CLOS)
+        xSemaphoreGive(ESPRetHandle);
+      else if (ESPState == ESP_STATE_OPEN)
+      {
+        UDPState = UDP_NOT_READY;
+        ESPRes = ESP_RES_CLOS;
+        xSemaphoreGive(ESPRetHandle);
+      }
     }
-    else if (rlen-st >= 2 && strstr((char *)(raw+st), "> ") != NULL)
+    else if (rlen-st >= 1 && strstr((char *)(raw+st), ">") != NULL)
     {
       if (state == ESP_GOK)
       {
-        if (ESP8266State == ESP8266_STATE_HEAD)
-          xSemaphoreGive(ESP8266RetHandle);
+        if (ESPState == ESP_STATE_HEAD)
+          xSemaphoreGive(ESPRetHandle);
         else
         {
-          itm_printf("OK > :state error:%d\n",ESP8266State);
-          ESP8266ForceClear = 1;
+          itm_printf("OK > :state error:%d\n",ESPState);
+          ESPForceClear = 1;
         }
         state = ESP_NON;
       }
       else
       {
         itm_printf("> :missing ESP_GOK:%d\n",state);
-        ESP8266ForceClear = 1;
+        ESPForceClear = 1;
       }
     }
     else if (rlen-st >= 17 && strstr((char *)(raw+st), "ALREADY CONNECTED") != NULL)
     {
-      if (ESP8266State == ESP8266_STATE_OPEN)
+      if (ESPState == ESP_STATE_OPEN)
       {
         UDPState = UDP_NOT_READY;
-        ESP8266Res = ESP8266_RES_CLOS;
-        xSemaphoreGive(ESP8266RetHandle);
+        ESPRes = ESP_RES_CLOS;
+        xSemaphoreGive(ESPRetHandle);
       }
       else
-        itm_printf("ALREADY CONNECTED:state error:%d\n",ESP8266State);
+        itm_printf("ALREADY CONNECTED:state error:%d\n",ESPState);
     }
     else if (rlen-st >= 7 && strstr((char *)(raw+st), "CONNECT") != NULL)
     {
-      if (ESP8266State == ESP8266_STATE_OPEN)
+      if (ESPState == ESP_STATE_OPEN)
       {
         UDPState = UDP_READY;
-        xSemaphoreGive(ESP8266RetHandle);
+        xSemaphoreGive(ESPRetHandle);
       }
       else
-        itm_printf("CONNECT:state error:%d\n",ESP8266State);
+        itm_printf("CONNECT:state error:%d\n",ESPState);
     }
     else if (rlen-st >= 4 && strstr((char *)(raw+st), "Recv") != NULL)
     {
-      if (ESP8266State == ESP8266_STATE_SEND)
-        xSemaphoreGive(ESP8266RetHandle);
+      if (ESPState == ESP_STATE_SEND)
+        xSemaphoreGive(ESPRetHandle);
       else
-        itm_printf("Recv:state error:%d\n",ESP8266State);
+        itm_printf("Recv:state error:%d\n",ESPState);
     }
-    else if (((rlen-st >= 9 && strstr((char *)(raw+st), "busy p...") != NULL) || (rlen-st >= 9 && strstr((char *)(raw+st), "busy s...") != NULL)) && ESP8266State != ESP8266_STATE_IDLE)
+    else if (((rlen-st >= 9 && strstr((char *)(raw+st), "busy p...") != NULL) || (rlen-st >= 9 && strstr((char *)(raw+st), "busy s...") != NULL)) && ESPState != ESP_STATE_IDLE)
     {
-      // ESP8266Res = ESP8266_RES_RSNT;
-      xSemaphoreGive(ESP8266RetHandle);
+      // ESPRes = ESP_RES_RSNT;
+      xSemaphoreGive(ESPRetHandle);
     }
     else
       itm_printf("unknow esp:#%s#\n",raw);
     osDelay(1);
   }
-  /* USER CODE END StartESP8266RetTask */
+  /* USER CODE END StartESPRetTask */
 }
 
 /* USER CODE BEGIN Header_StartNetworkCheckTask */
@@ -620,23 +642,23 @@ void StartESP8266RetTask(void const * argument)
 void StartNetworkCheckTask(void const * argument)
 {
   /* USER CODE BEGIN StartNetworkCheckTask */
-  osMutexWait(ESP8266MutexHandle, osWaitForever);
-  ESP8266Init();
-  osMutexRelease(ESP8266MutexHandle);
+  osMutexWait(ESPMutexHandle, osWaitForever);
+  ESPInit();
+  osMutexRelease(ESPMutexHandle);
   /* Infinite loop */
   for(;;)
   {
     if (NetworkState != NETWORK_READY)
     {
-      osMutexWait(ESP8266MutexHandle, osWaitForever);
-      ESP8266Connect();
-      osMutexRelease(ESP8266MutexHandle);
+      osMutexWait(ESPMutexHandle, osWaitForever);
+      ESPConnect();
+      osMutexRelease(ESPMutexHandle);
     }
     if (NetworkState == NETWORK_READY && UDPState != UDP_READY)
     {
-      osMutexWait(ESP8266MutexHandle, osWaitForever);
-      ESP8266Open();
-      osMutexRelease(ESP8266MutexHandle);
+      osMutexWait(ESPMutexHandle, osWaitForever);
+      ESPOpen();
+      osMutexRelease(ESPMutexHandle);
     }
     osDelay(5000);
   }
@@ -675,7 +697,7 @@ uint8_t SendAMGData(const AMGData * data,int qos)
     *(p++) = (a >> 8) || b & ((1<<4) - 1);
     *(p++) = b >> 4;
   }
-  ret = SendUDPPackage(1,0,(char *)raw,12 * 64 / 8);
+  ret = SendUDPPackage(1,0,raw,12 * 64 / 8);
   vPortFree(raw);
   return ret;
 }
@@ -728,7 +750,7 @@ void StartSingleACKTask(void const * argument)
   }
   else
   {
-    // itm_printf("Got %d ACK!\n",id);
+    itm_printf("Got %d ACK!\n",id);
     FreeACK(id);
   }
   vTaskDelete(NULL);
@@ -764,11 +786,11 @@ uint8_t SendACKPackage(uint8_t id, uint8_t resend, uint32_t crc)
   return NETWORK_SEND_OK;
 }
 
-uint8_t SendUDPPackage(uint8_t op, uint8_t qos, char *data, size_t len)
+uint8_t SendUDPPackage(uint8_t op, uint8_t qos, uint8_t *data, size_t len)
 {
   osMutexWait(UDPSendMutexHandle,osWaitForever);
   if (data!=NULL && len == 0xFFFF)
-    len = strlen(data);
+    len = strlen((char *)data);
   uint8_t *raw;
   UDPRequest t;
   if (op>=(1<<3) || len>=(1<<9) || qos>=(1<<1))

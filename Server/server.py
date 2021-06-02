@@ -128,11 +128,11 @@ class Server(threading.Thread):
             else:
                 break
         if flag:
-            self.logger.error("Hello from the client")
             self.logger.info(f"{Id} ACKed")
         self.FreeACK(Id)
 
     def SendACKPackage(self, Id, resend, crc):
+        self.logger.debug("ACK sent")
         if Id >= (1 << 7):
             self.logger.error("ACK id too large")
             return
@@ -180,7 +180,7 @@ class Server(threading.Thread):
                     self.logger.error("ACK len error, drop")
                     continue
                 crc = raw[2:6]
-                self.logger.debug(f"Recieve CRC: {crc.hex()}")
+                self.logger.debug(f"Receive CRC: {crc.hex()}")
                 if (Id == 0):
                     self.logger("ack id is zero, drop")
                     continue
@@ -216,25 +216,25 @@ class Server(threading.Thread):
             if op == 0x0:
                 self.logger.info(raw.decode("utf-8"))
             elif op == 0x1:
-                self.logger.warning("Server recieve MotorStop cmd")
+                self.logger.warning("Server receive MotorStop cmd")
             elif op == 0x2:
-                self.logger.warning("Server recieve MotorStart cmd")
+                self.logger.warning("Server receive MotorStart cmd")
             elif op == 0x3:
-                self.logger.warning("Server recieve ChargerOff cmd")
+                self.logger.warning("Server receive ChargerOff cmd")
             elif op == 0x4:
-                self.logger.warning("Server recieve ChargerOn cmd")
+                self.logger.warning("Server receive ChargerOn cmd")
             elif op == 0x5:
                 if cnt != 2:
-                    self.logger.error("Recieve broken MotorSpeed")
+                    self.logger.error("Receive broken MotorSpeed")
                 else:
                     self.logger.warning(
-                        f"Server recieve MotorSpeed cmd, speed: {int.from_bytes(raw,byteorder='little')}")
+                        f"Server receive MotorSpeed cmd, speed: {int.from_bytes(raw,byteorder='little')}")
             elif op == 0x6:
                 if cnt < 2:
-                    self.logger.error("Recieve broken PING")
+                    self.logger.error("Receive broken PING")
                 else:
                     self.logger.info(
-                        f"Recieve PING, cap voltage:{round(int.from_bytes(raw[0:2],byteorder='little')/4096*3.3*5, 3)}V")
+                        f"Receive PING, cap voltage:{round(int.from_bytes(raw[0:2],byteorder='little')/4096*3.3*5, 3)}V")
 
     def send(self, op, qos, data=b""):
         if isinstance(data, str):

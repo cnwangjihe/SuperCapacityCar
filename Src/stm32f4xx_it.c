@@ -37,9 +37,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define USART_RECIEVE_PENDING 0
-#define USART_RECIEVE_RUNNING 1
-#define USART_RECIEVE_OVERFLW 2
+#define USART_RECEIVE_PENDING 0
+#define USART_RECEIVE_RUNNING 1
+#define USART_RECEIVE_OVERFLW 2
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -49,9 +49,9 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-// extern UARTPackage RecievedPackage[RECIEVE_QUEUE_MAX];
-// extern uint8_t RecievedPackagePos;
-extern MessageBufferHandle_t RecieveQueueHandle, ESP8266RetQueueHandle;
+// extern UARTPackage ReceivedPackage[RECEIVE_QUEUE_MAX];
+// extern uint8_t ReceivedPackagePos;
+extern MessageBufferHandle_t ReceiveQueueHandle, ESPRetQueueHandle;
 uint8_t usart1_status;
 size_t BufferLen = 0;
 uint8_t Buffer[UART_BUF_SIZE];
@@ -69,6 +69,7 @@ uint8_t Buffer[UART_BUF_SIZE];
 
 /* External variables --------------------------------------------------------*/
 extern DMA_HandleTypeDef hdma_adc1;
+extern DMA_HandleTypeDef hdma_spi1_tx;
 extern TIM_HandleTypeDef htim9;
 extern UART_HandleTypeDef huart1;
 extern TIM_HandleTypeDef htim6;
@@ -177,6 +178,20 @@ void DebugMon_Handler(void)
 /******************************************************************************/
 
 /**
+  * @brief This function handles EXTI line3 interrupt.
+  */
+void EXTI3_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI3_IRQn 0 */
+
+  /* USER CODE END EXTI3_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_3);
+  /* USER CODE BEGIN EXTI3_IRQn 1 */
+
+  /* USER CODE END EXTI3_IRQn 1 */
+}
+
+/**
   * @brief This function handles TIM1 break interrupt and TIM9 global interrupt.
   */
 void TIM1_BRK_TIM9_IRQHandler(void)
@@ -200,14 +215,14 @@ void USART1_IRQHandler(void)
 
   if ((__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE) != RESET))
   {
-    if (usart1_status == USART_RECIEVE_PENDING)
+    if (usart1_status == USART_RECEIVE_PENDING)
     {
-      usart1_status = USART_RECIEVE_RUNNING;
+      usart1_status = USART_RECEIVE_RUNNING;
       __HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
     }
     if (BufferLen == UART_BUF_SIZE)
     {
-      usart1_status = USART_RECIEVE_OVERFLW;
+      usart1_status = USART_RECEIVE_OVERFLW;
       BufferLen = 0; // drop
       if (Buffer[UART_BUF_SIZE-1]=='\r')
         Buffer[BufferLen++] = '\r';
@@ -215,22 +230,22 @@ void USART1_IRQHandler(void)
     }
     Buffer[BufferLen++] = (uint8_t)(huart1.Instance->DR & (uint8_t)0x00FF);
     // itm_printf("%02x#",Buffer[BufferLen-1]);
-    if (BufferLen == 2 && Buffer[0]=='>' && Buffer[1]==' ')
+    if (BufferLen == 1 && Buffer[0]=='>')
     {
-      xMessageBufferSendFromISR(ESP8266RetQueueHandle,Buffer,BufferLen,NULL);
-      usart1_status = USART_RECIEVE_RUNNING;
+      xMessageBufferSendFromISR(ESPRetQueueHandle,Buffer,BufferLen,NULL);
+      usart1_status = USART_RECEIVE_RUNNING;
       BufferLen = 0;
     }
     else if (BufferLen > 1 && Buffer[BufferLen-2] == '\r' && Buffer[BufferLen-1] == '\n') // reach the end of line
     {
-      if (BufferLen > 2 && usart1_status != USART_RECIEVE_OVERFLW)
+      if (BufferLen > 2 && usart1_status != USART_RECEIVE_OVERFLW)
       {
         if (Buffer[0] == '+' && Buffer[1] == 'I')
-          xMessageBufferSendFromISR(RecieveQueueHandle,Buffer,BufferLen-2,NULL);
+          xMessageBufferSendFromISR(ReceiveQueueHandle,Buffer,BufferLen-2,NULL);
         else
-          xMessageBufferSendFromISR(ESP8266RetQueueHandle,Buffer,BufferLen-2,NULL);
+          xMessageBufferSendFromISR(ESPRetQueueHandle,Buffer,BufferLen-2,NULL);
       }
-      usart1_status = USART_RECIEVE_RUNNING;
+      usart1_status = USART_RECEIVE_RUNNING;
       BufferLen = 0;
     }
     __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE);
@@ -239,36 +254,36 @@ void USART1_IRQHandler(void)
   if ((__HAL_UART_GET_FLAG(&huart1, UART_FLAG_IDLE) != RESET))
   {
     __HAL_UART_DISABLE_IT(&huart1,UART_IT_IDLE);
-    if (BufferLen != 0 && usart1_status != USART_RECIEVE_OVERFLW)
+    if (BufferLen != 0 && usart1_status != USART_RECEIVE_OVERFLW)
     {
       if (BufferLen > 2 && Buffer[0] == '+' && Buffer[1] == 'I')
-        xMessageBufferSendFromISR(RecieveQueueHandle,Buffer,BufferLen,NULL);
-      else
+        xMessageBufferSendFromISR(ReceiveQueueHandle,Buffer,BufferLen,NULL);
+      else if (!(BufferLen == 1 && Buffer[0] == ' '))
         itm_printf("Why?:#%.*s#\n",BufferLen,Buffer);
     }
     BufferLen = 0;
-    usart1_status = USART_RECIEVE_PENDING;
+    usart1_status = USART_RECEIVE_PENDING;
   }
 
   // if ((__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE) != RESET))
   // {
   //   // itm_printf("-1");
-  //   if (usart1_status == USART_RECIEVE_PENDING)
+  //   if (usart1_status == USART_RECEIVE_PENDING)
   //   {
-  //     RecievedPackagePos++;
-  //     RecievedPackagePos &= (RECIEVE_QUEUE_MAX - 1);
-  //     RecievedPackage[RecievedPackagePos].len = 0;
-  //     usart1_status = USART_RECIEVE_RUNNING;
+  //     ReceivedPackagePos++;
+  //     ReceivedPackagePos &= (RECEIVE_QUEUE_MAX - 1);
+  //     ReceivedPackage[ReceivedPackagePos].len = 0;
+  //     usart1_status = USART_RECEIVE_RUNNING;
   //     __HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
   //   }
-  //   if (usart1_status != USART_RECIEVE_OVERFLW)
+  //   if (usart1_status != USART_RECEIVE_OVERFLW)
   //   {
-  //     RecievedPackage[RecievedPackagePos].s[RecievedPackage[RecievedPackagePos].len++] = (uint8_t)(huart1.Instance->DR & (uint8_t)0x00FF);
-  //     if (RecievedPackage[RecievedPackagePos].len == 1 && (RecievedPackage[RecievedPackagePos].s[0] == '\r' 
-  //         || RecievedPackage[RecievedPackagePos].s[0] == '\n' || RecievedPackage[RecievedPackagePos].s[0] == ' '))
-  //       RecievedPackage[RecievedPackagePos].len--;
-  //     if (RecievedPackage[RecievedPackagePos].len == UART_BUF_SIZE)
-  //       usart1_status = USART_RECIEVE_OVERFLW;
+  //     ReceivedPackage[ReceivedPackagePos].s[ReceivedPackage[ReceivedPackagePos].len++] = (uint8_t)(huart1.Instance->DR & (uint8_t)0x00FF);
+  //     if (ReceivedPackage[ReceivedPackagePos].len == 1 && (ReceivedPackage[ReceivedPackagePos].s[0] == '\r' 
+  //         || ReceivedPackage[ReceivedPackagePos].s[0] == '\n' || ReceivedPackage[ReceivedPackagePos].s[0] == ' '))
+  //       ReceivedPackage[ReceivedPackagePos].len--;
+  //     if (ReceivedPackage[ReceivedPackagePos].len == UART_BUF_SIZE)
+  //       usart1_status = USART_RECEIVE_OVERFLW;
   //   }
   //   __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE);
   //   return;
@@ -276,24 +291,24 @@ void USART1_IRQHandler(void)
   // if ((__HAL_UART_GET_FLAG(&huart1, UART_FLAG_IDLE) != RESET))
   // {
   //   __HAL_UART_DISABLE_IT(&huart1,UART_IT_IDLE);
-  //   if (usart1_status != USART_RECIEVE_OVERFLW)
+  //   if (usart1_status != USART_RECEIVE_OVERFLW)
   //   {
   //     // itm_printf("Again?");
-  //     usart1_status = USART_RECIEVE_PENDING;
-  //     if (RecievedPackage[RecievedPackagePos].len >=2 && RecievedPackage[RecievedPackagePos].s[0] == '+' && RecievedPackage[RecievedPackagePos].s[1] == 'I')
+  //     usart1_status = USART_RECEIVE_PENDING;
+  //     if (ReceivedPackage[ReceivedPackagePos].len >=2 && ReceivedPackage[ReceivedPackagePos].s[0] == '+' && ReceivedPackage[ReceivedPackagePos].s[1] == 'I')
   //     {
-  //       // xQueueSendFromISR(RecieveQueueHandle,&RecievedPackagePos,NULL);
-  //       xStreamBufferSendFromISR(RecieveQueueHandle,&RecievedPackagePos,sizeof(uint8_t),NULL);
+  //       // xQueueSendFromISR(ReceiveQueueHandle,&ReceivedPackagePos,NULL);
+  //       xStreamBufferSendFromISR(ReceiveQueueHandle,&ReceivedPackagePos,sizeof(uint8_t),NULL);
   //     }
   //     else
   //     {
-  //       // xQueueSendFromISR(ESP8266RetQueueHandle,&RecievedPackagePos,NULL);
-  //       xStreamBufferSendFromISR(ESP8266RetQueueHandle,&RecievedPackagePos,sizeof(uint8_t),NULL);
+  //       // xQueueSendFromISR(ESPRetQueueHandle,&ReceivedPackagePos,NULL);
+  //       xStreamBufferSendFromISR(ESPRetQueueHandle,&ReceivedPackagePos,sizeof(uint8_t),NULL);
   //     }
   //     // itm_printf("No...\n");
   //   }
   //   else
-  //     usart1_status = USART_RECIEVE_PENDING;
+  //     usart1_status = USART_RECEIVE_PENDING;
     
   //   return;
   // }
@@ -329,6 +344,20 @@ void DMA2_Stream0_IRQHandler(void)
   /* USER CODE BEGIN DMA2_Stream0_IRQn 1 */
 
   /* USER CODE END DMA2_Stream0_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA2 stream3 global interrupt.
+  */
+void DMA2_Stream3_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA2_Stream3_IRQn 0 */
+
+  /* USER CODE END DMA2_Stream3_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_spi1_tx);
+  /* USER CODE BEGIN DMA2_Stream3_IRQn 1 */
+
+  /* USER CODE END DMA2_Stream3_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

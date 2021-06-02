@@ -83,22 +83,25 @@ void Error_Handler(void);
 #define K1_GPIO_Port GPIOE
 #define K0_Pin GPIO_PIN_4
 #define K0_GPIO_Port GPIOE
+#define ESP_reset_Pin GPIO_PIN_2
+#define ESP_reset_GPIO_Port GPIOF
+#define ESP_handshake_Pin GPIO_PIN_3
+#define ESP_handshake_GPIO_Port GPIOF
+#define ESP_handshake_EXTI_IRQn EXTI3_IRQn
+#define ESP_notify_Pin GPIO_PIN_4
+#define ESP_notify_GPIO_Port GPIOF
+#define ChargerCtrl_Pin GPIO_PIN_8
+#define ChargerCtrl_GPIO_Port GPIOF
 #define LED0_Pin GPIO_PIN_9
 #define LED0_GPIO_Port GPIOF
 #define LED1_Pin GPIO_PIN_10
 #define LED1_GPIO_Port GPIOF
-#define OLED_CS_Pin GPIO_PIN_0
-#define OLED_CS_GPIO_Port GPIOC
-#define ChargerCtrl_Pin GPIO_PIN_3
-#define ChargerCtrl_GPIO_Port GPIOC
 #define OLED_DC_Pin GPIO_PIN_15
 #define OLED_DC_GPIO_Port GPIOD
-#define DP_CLK_Pin GPIO_PIN_11
-#define DP_CLK_GPIO_Port GPIOC
-#define DP_DIO_Pin GPIO_PIN_12
-#define DP_DIO_GPIO_Port GPIOC
 #define OLED_Res_Pin GPIO_PIN_4
 #define OLED_Res_GPIO_Port GPIOD
+#define OLED_CS_Pin GPIO_PIN_5
+#define OLED_CS_GPIO_Port GPIOD
 /* USER CODE BEGIN Private defines */
 #define REP0(X)
 #define REP1(X) X
@@ -123,7 +126,7 @@ void Error_Handler(void);
 #define QOS_NONE 0
 #define MAX_CAP_VOL 10
 #define MIN_CAP_VOL 2
-#define RECIEVE_QUEUE_MAX 0x80
+#define RECEIVE_QUEUE_MAX 0x80
 #define UDP_NOT_READY 0
 #define UDP_READY 1
 #define NETWORK_NOT_READY 0
