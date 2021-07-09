@@ -223,13 +223,13 @@ void StartCapADCTask(void const * argument)
   /* Infinite loop */
   
   //speed test
-  uint8_t *raw = (uint8_t *)pvPortMalloc(500);
-  memset(raw,'a',500);
-  for (;;)
-  {
-    SendUDPPackage(0,0,raw,500);
-    // osDelay(40);
-  }
+  // uint8_t *raw = (uint8_t *)pvPortMalloc(500);
+  // memset(raw,'a',500);
+  // for (;;)
+  // {
+  //   SendUDPPackage(0,0,raw,500);
+  //   // osDelay(40);
+  // }
   //speed test
 
   for(uint8_t i=1;1;i++)

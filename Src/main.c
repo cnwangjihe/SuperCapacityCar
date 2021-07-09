@@ -22,7 +22,6 @@
 #include "cmsis_os.h"
 #include "adc.h"
 #include "crc.h"
-#include "dcmi.h"
 #include "dma.h"
 #include "i2c.h"
 #include "rng.h"
@@ -98,14 +97,12 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_ADC1_Init();
-  MX_SPI1_Init();
   MX_USART1_UART_Init();
   MX_TIM3_Init();
   MX_RNG_Init();
   MX_TIM9_Init();
   MX_CRC_Init();
   MX_SPI2_Init();
-  MX_DCMI_Init();
   MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
 
@@ -149,9 +146,9 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 4;
-  RCC_OscInitStruct.PLL.PLLN = 160;
+  RCC_OscInitStruct.PLL.PLLN = 144;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 7;
+  RCC_OscInitStruct.PLL.PLLQ = 6;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -165,7 +162,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
   {
     Error_Handler();
   }

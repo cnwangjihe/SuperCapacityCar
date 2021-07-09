@@ -1,7 +1,8 @@
 #include "main.h"
 
-#define ESP_IGN 0xFE
-#define ESP_END 0xFF
+#define ESP_BOUND  "\xED\x4D\xB9\x6F"
+#define UART_BEGIN "\xDE\xDA\xBE\xFE"
+#define UART_END   "\xED\xF4"
 
 #define ESP_IDLE 0
 #define ESP_NRST 1
@@ -17,8 +18,5 @@
 #define espspi hspi1
 
 void ESPInit();
-void ESPClear();
 uint8_t ESPSend(uint8_t *raw,size_t len);
-uint16_t ESPCalcParity(uint16_t len);
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 

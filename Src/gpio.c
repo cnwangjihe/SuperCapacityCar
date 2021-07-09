@@ -53,10 +53,10 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOF, ESP_reset_Pin|LED0_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOF, ChargerCtrl_Pin|LED1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOF, ESP_notify_Pin|ChargerCtrl_Pin|LED1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LED0_GPIO_Port, LED0_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, OLED_DC_Pin|OLED_Res_Pin|OLED_CS_Pin, GPIO_PIN_RESET);
@@ -74,24 +74,11 @@ void MX_GPIO_Init(void)
   HAL_GPIO_Init(K0_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PtPin */
-  GPIO_InitStruct.Pin = ESP_reset_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-  HAL_GPIO_Init(ESP_reset_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PtPin */
-  GPIO_InitStruct.Pin = ESP_handshake_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-  HAL_GPIO_Init(ESP_handshake_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PFPin PFPin */
-  GPIO_InitStruct.Pin = ESP_notify_Pin|ChargerCtrl_Pin;
+  GPIO_InitStruct.Pin = ChargerCtrl_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+  HAL_GPIO_Init(ChargerCtrl_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PFPin PFPin */
   GPIO_InitStruct.Pin = LED0_Pin|LED1_Pin;
@@ -113,10 +100,6 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(OLED_CS_GPIO_Port, &GPIO_InitStruct);
-
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI3_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(EXTI3_IRQn);
 
 }
 

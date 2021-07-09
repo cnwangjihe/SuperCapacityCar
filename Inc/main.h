@@ -72,13 +72,6 @@ void Error_Handler(void);
 #define K1_GPIO_Port GPIOE
 #define K0_Pin GPIO_PIN_4
 #define K0_GPIO_Port GPIOE
-#define ESP_reset_Pin GPIO_PIN_2
-#define ESP_reset_GPIO_Port GPIOF
-#define ESP_handshake_Pin GPIO_PIN_3
-#define ESP_handshake_GPIO_Port GPIOF
-#define ESP_handshake_EXTI_IRQn EXTI3_IRQn
-#define ESP_notify_Pin GPIO_PIN_4
-#define ESP_notify_GPIO_Port GPIOF
 #define ChargerCtrl_Pin GPIO_PIN_8
 #define ChargerCtrl_GPIO_Port GPIOF
 #define LED0_Pin GPIO_PIN_9
@@ -113,8 +106,6 @@ void Error_Handler(void);
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
 #define UART_BUF_SIZE 0x300
-#define UART_BEGIN "\xDE\xAD\xBE\xEF"
-#define UART_END "\xED\xF4"
 
 #define NETWORK_SEND_OK 1
 #define NETWORK_SEND_FAILED 0

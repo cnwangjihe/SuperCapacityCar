@@ -28,6 +28,7 @@
 #include "cmsis_os.h"
 #include "stream_buffer.h"
 #include "message_buffer.h"
+#include "ESP.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -64,8 +65,6 @@ uint8_t Buffer[UART_BUF_SIZE];
 
 /* External variables --------------------------------------------------------*/
 extern DMA_HandleTypeDef hdma_adc1;
-extern DMA_HandleTypeDef hdma_dcmi;
-extern DMA_HandleTypeDef hdma_spi1_tx;
 extern TIM_HandleTypeDef htim9;
 extern UART_HandleTypeDef huart1;
 extern TIM_HandleTypeDef htim6;
@@ -174,20 +173,6 @@ void DebugMon_Handler(void)
 /******************************************************************************/
 
 /**
-  * @brief This function handles EXTI line3 interrupt.
-  */
-void EXTI3_IRQHandler(void)
-{
-  /* USER CODE BEGIN EXTI3_IRQn 0 */
-
-  /* USER CODE END EXTI3_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_3);
-  /* USER CODE BEGIN EXTI3_IRQn 1 */
-
-  /* USER CODE END EXTI3_IRQn 1 */
-}
-
-/**
   * @brief This function handles TIM1 break interrupt and TIM9 global interrupt.
   */
 void TIM1_BRK_TIM9_IRQHandler(void)
@@ -266,34 +251,6 @@ void DMA2_Stream0_IRQHandler(void)
   /* USER CODE BEGIN DMA2_Stream0_IRQn 1 */
 
   /* USER CODE END DMA2_Stream0_IRQn 1 */
-}
-
-/**
-  * @brief This function handles DMA2 stream1 global interrupt.
-  */
-void DMA2_Stream1_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMA2_Stream1_IRQn 0 */
-
-  /* USER CODE END DMA2_Stream1_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_dcmi);
-  /* USER CODE BEGIN DMA2_Stream1_IRQn 1 */
-
-  /* USER CODE END DMA2_Stream1_IRQn 1 */
-}
-
-/**
-  * @brief This function handles DMA2 stream3 global interrupt.
-  */
-void DMA2_Stream3_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMA2_Stream3_IRQn 0 */
-
-  /* USER CODE END DMA2_Stream3_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_spi1_tx);
-  /* USER CODE BEGIN DMA2_Stream3_IRQn 1 */
-
-  /* USER CODE END DMA2_Stream3_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
