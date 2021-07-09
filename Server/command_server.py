@@ -13,6 +13,7 @@ SEND_TOO_LONG = 1
 SEND_TYPE_ERROR = 2
 SEND_OFFLINE = 3
 
+
 class ACKPackage(object):
     def __init__(self):
         self.raw = b''
@@ -20,7 +21,7 @@ class ACKPackage(object):
         self.inuse = False
 
 
-class Server(threading.Thread):
+class CommandServer(threading.Thread):
     def __init__(self, logger, ip="0.0.0.0", port=5555):
         threading.Thread.__init__(self)
         random.seed()

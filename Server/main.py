@@ -1,8 +1,8 @@
-import server
+import command_server
 import logger
 
 lg = logger.Logger(usefile=False)
-s = server.Server(lg)
+s = command_server.CommandServer(lg)
 s.start()
 
 

@@ -3,13 +3,14 @@ import time
 import coloredlogs
 
 
-class Logger:
+class Logger(logging.Logger):
     def _none(self, *iterables):
         pass
 
     def __init__(self, usestdout=True, usefile=True, filename="server.log"):
+        super().__init__("main")
         self.formatter = logging.Formatter(
-            '[%(asctime)s][%(levelname)s]: %(message)s')
+            '[%(asctime)s][%(levelname)s][%(module)s]: %(message)s')
         st = time.time()
         self.level = logging.INFO
         self.logger = logging.getLogger("Logger")
@@ -21,7 +22,7 @@ class Logger:
             self.critical = self._none
         if usestdout:
             coloredlogs.install(level=self.level, logger=self.logger,
-                                fmt="%(asctime)s %(levelname)s %(message)s")
+                                fmt="%(asctime)s %(levelname)s [%(module)s]: %(message)s")
         if usefile:
             self.filelogger = logging.FileHandler(filename)
             self.filelogger.setLevel(self.level)
@@ -33,4 +34,14 @@ class Logger:
         self.warning = self.logger.warning
         self.error = self.logger.error
         self.critical = self.logger.critical
+        self.usestdout = usestdout
+        self.usefile = usefile
         self.info("Logger inited in %.3fs" % (time.time() - st))
+        # logging.Logger.manager.loggerDict["main"] = self.logger
+    
+    def install(self, lg):
+        if self.usestdout:
+            coloredlogs.install(level=self.level, logger=lg,
+                                fmt="%(asctime)s %(levelname)s [%(module)s]: %(message)s")
+        if self.usefile:
+            lg.addHandler(self.filelogger)

@@ -37,12 +37,7 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-// typedef struct {
-// 	uint8_t *data;
-//   size_t len;
-//   uint8_t id;
-// }ACKRequest;
-#define UART_BUF_SIZE 0x280
+
 typedef struct {
   uint16_t data[64];
 }AMGData;
@@ -52,12 +47,6 @@ typedef struct {
   size_t len;
   uint8_t id;
 }UDPRequest;
-
-typedef struct {
-  uint8_t s[UART_BUF_SIZE];
-  size_t len;
-}UARTPackage;
-
 
 /* USER CODE END ET */
 
@@ -120,6 +109,13 @@ void Error_Handler(void);
   REP##TENS(REP10(X)) \
   REP##ONES(X)
 
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+
+#define UART_BUF_SIZE 0x300
+#define UART_BEGIN "\xDE\xAD\xBE\xEF"
+#define UART_END "\xED\xF4"
+
 #define NETWORK_SEND_OK 1
 #define NETWORK_SEND_FAILED 0
 #define QOS_ACK 1
@@ -127,13 +123,6 @@ void Error_Handler(void);
 #define MAX_CAP_VOL 10
 #define MIN_CAP_VOL 2
 #define RECEIVE_QUEUE_MAX 0x80
-#define UDP_NOT_READY 0
-#define UDP_READY 1
-#define NETWORK_NOT_READY 0
-#define NETWORK_READY 1
-#define ESP_NON 0
-#define ESP_CWJ 1
-#define ESP_GOK 2
 #define ITMassert(x,y) if ((x) == 0) {printf("%s",(y));}
 #define DEBUG
 #ifdef DEBUG
