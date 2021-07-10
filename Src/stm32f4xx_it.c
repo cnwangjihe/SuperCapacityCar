@@ -84,7 +84,6 @@ void NMI_Handler(void)
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
 
   /* USER CODE END NonMaskableInt_IRQn 0 */
-  HAL_RCC_NMI_IRQHandler();
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
   while (1)
   {
@@ -197,7 +196,7 @@ void USART1_IRQHandler(void)
   {
     if (BufferLen == UART_BUF_SIZE)
     {
-      BufferLen = 0; // drop
+      BufferLen = pbgn = pend = 0; // drop
       itm_printf("Received line tooooooo looooong\n");
       __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE);
       return ;
@@ -206,17 +205,22 @@ void USART1_IRQHandler(void)
     uint8_t v = (uint8_t)(huart1.Instance->DR & (uint8_t)0x00FF);
     if (pbgn < 4)
       pbgn = (v == UART_BEGIN[pbgn]) ? pbgn+1 : (v == UART_BEGIN[0]);
-    else if (pbgn == 4)
+    else
     {
+      // itm_printf("Got begin\n");
       Buffer[BufferLen++] = v;
       pend = (v == UART_END[pend]) ? pend+1 : (v == UART_END[0]);
-      if (pend == 2)
+      // itm_printf("pend:%d,%#04x\n",pend,v);
+      if (pend == 4)
       {
-        xMessageBufferSendFromISR(ReceiveQueueHandle, Buffer, BufferLen-2, &Woken);
-        BufferLen = pend = 0;
+        // itm_printf("Got end\n");
+        xMessageBufferSendFromISR(ReceiveQueueHandle, Buffer, BufferLen-4, &Woken);
+        BufferLen = pbgn = pend = 0;
       }
     }
-    portYIELD_FROM_ISR(Woken);
+    itm_printf("pbgn:%d,pend:%d,%#04x\n",pbgn,pend,v);
+    __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE);
+    // portYIELD_FROM_ISR(Woken);
     return ;
   }
   /* USER CODE END USART1_IRQn 0 */

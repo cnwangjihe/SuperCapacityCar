@@ -23,7 +23,6 @@
 #include "adc.h"
 #include "crc.h"
 #include "dma.h"
-#include "i2c.h"
 #include "rng.h"
 #include "spi.h"
 #include "tim.h"
@@ -52,7 +51,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint32_t NetworkTick;
+uint32_t GlobalTick;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -102,8 +101,8 @@ int main(void)
   MX_RNG_Init();
   MX_TIM9_Init();
   MX_CRC_Init();
-  MX_SPI2_Init();
-  MX_I2C2_Init();
+  MX_SPI1_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -166,9 +165,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  /** Enables the Clock Security System
-  */
-  HAL_RCC_EnableCSS();
 }
 
 /* USER CODE BEGIN 4 */
@@ -186,7 +182,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
   if (htim->Instance == TIM9) {
-    NetworkTick++;
+    GlobalTick++;
     HAL_GPIO_TogglePin(LED0_GPIO_Port,LED0_Pin);
   }
   /* USER CODE END Callback 0 */

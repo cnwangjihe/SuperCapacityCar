@@ -2,7 +2,7 @@
 
 #define ESP_BOUND  "\xED\x4D\xB9\x6F"
 #define UART_BEGIN "\xDE\xDA\xBE\xFE"
-#define UART_END   "\xED\xF4"
+#define UART_END   "\xED\xF4\x23\x5D"
 
 #define ESP_IDLE 0
 #define ESP_NRST 1

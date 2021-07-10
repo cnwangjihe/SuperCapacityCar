@@ -78,12 +78,28 @@ void Error_Handler(void);
 #define LED0_GPIO_Port GPIOF
 #define LED1_Pin GPIO_PIN_10
 #define LED1_GPIO_Port GPIOF
-#define OLED_DC_Pin GPIO_PIN_15
-#define OLED_DC_GPIO_Port GPIOD
-#define OLED_Res_Pin GPIO_PIN_4
-#define OLED_Res_GPIO_Port GPIOD
-#define OLED_CS_Pin GPIO_PIN_5
-#define OLED_CS_GPIO_Port GPIOD
+#define RES_Pin GPIO_PIN_14
+#define RES_GPIO_Port GPIOB
+#define DC_Pin GPIO_PIN_15
+#define DC_GPIO_Port GPIOB
+#define CS_Pin GPIO_PIN_8
+#define CS_GPIO_Port GPIOD
+#define L1_Pin GPIO_PIN_0
+#define L1_GPIO_Port GPIOD
+#define L3_Pin GPIO_PIN_1
+#define L3_GPIO_Port GPIOD
+#define L2_Pin GPIO_PIN_2
+#define L2_GPIO_Port GPIOD
+#define L4_Pin GPIO_PIN_3
+#define L4_GPIO_Port GPIOD
+#define IN2_Pin GPIO_PIN_6
+#define IN2_GPIO_Port GPIOB
+#define IN4_Pin GPIO_PIN_7
+#define IN4_GPIO_Port GPIOB
+#define IN3_Pin GPIO_PIN_8
+#define IN3_GPIO_Port GPIOB
+#define IN1_Pin GPIO_PIN_9
+#define IN1_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 #define REP0(X)
 #define REP1(X) X
@@ -113,6 +129,8 @@ void Error_Handler(void);
 #define QOS_NONE 0
 #define MAX_CAP_VOL 10
 #define MIN_CAP_VOL 2
+#define MOTOR_STOPPED 0
+#define MOTOR_RUNNING 1
 #define RECEIVE_QUEUE_MAX 0x80
 #define ITMassert(x,y) if ((x) == 0) {printf("%s",(y));}
 #define DEBUG

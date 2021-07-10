@@ -39,8 +39,11 @@
 #include "gpio.h"
 #include "rng.h"
 // #include "TM1637.h"
-#include "ssd1306.h"
-#include "ssd1306_tests.h"
+// #include "ssd1306.h"
+// #include "ssd1306_tests.h"
+#include "oled.h"
+#include "motor.h"
+#include "sensor.h"
 #include "ESP.h"
 #include "stream_buffer.h"
 #include "message_buffer.h"
@@ -65,8 +68,11 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 uint32_t adc1_7_res;
+float cap_avg;
+uint8_t MotorStatus;
 // TM1637 dp;
 uint8_t idTail;
+extern uint32_t GlobalTick;
 
 SemaphoreHandle_t ACKSemaphore[128];
 uint8_t ACKTimes[128];
@@ -82,6 +88,7 @@ osThreadId ChargerADCTaskHandle;
 osThreadId MotorTaskHandle;
 osThreadId NetworkSendTaskHandle;
 osThreadId NetworkReceiveTHandle;
+osThreadId OLEDTaskHandle;
 osMutexId ACKQueueMutexHandle;
 osMutexId UDPSendMutexHandle;
 
@@ -93,6 +100,9 @@ void ChargerOn();
 void MotorStart();
 void MotorStop();
 void MotorSpeed();
+void StartCharge();
+float GetCapVol();
+float GetAvgCapVol();
 uint8_t BitCount(uint8_t *data, size_t len);
 uint8_t SendACKPackage(uint8_t id, uint8_t resend, uint32_t crc);
 uint8_t SendUDPPackage(uint8_t op, uint8_t qos, uint8_t *data, size_t len);
@@ -110,6 +120,7 @@ void StartChargerADCTask(void const * argument);
 void StartMotorTask(void const * argument);
 void StartNetworkSendTask(void const * argument);
 void StartNetworkReceiveTask(void const * argument);
+void StartOLEDTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -136,18 +147,19 @@ void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackTy
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
-  // ACKQueueTail=ACKQueueHead=0;
   RetargetInit();
+  OLED_Init();
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4);
+  moto_stop();
+  OLED_InitShow();
   idTail = (uint8_t)(HAL_RNG_GetRandomNumber(&hrng) >> (32-8+1));
-  // dp.SCLK_GPIO_Port = DP_CLK_GPIO_Port;
-  // dp.SCLK_Pin = DP_CLK_Pin;
-  // dp.SDO_GPIO_Port = DP_DIO_GPIO_Port;
-  // dp.SDO_Pin = DP_DIO_Pin;
   HAL_TIM_Base_Start_IT(&htim9);
   HAL_ADC_Start_DMA(&hadc1,&adc1_7_res,1);
+  HAL_TIM_Base_Start(&htim3);
   ACKSemaphoreInit();
-  // itm_printf("%lX\n",CRC32((uint8_t *)"asdfasdf",8));
-  // itm_printf("%lX\n",CRC32((uint8_t *)"asdfasd",7));
   
   /* USER CODE END Init */
   /* Create the mutex(es) */
@@ -176,7 +188,6 @@ void MX_FREERTOS_Init(void) {
 
   ReceiveQueueHandle = xMessageBufferCreate(UART_BUF_SIZE * 8);
   
-  // HAL_UART_Receive_IT(&huart1,&recv_byte,1);
   itm_printf("InitHere!!!\n");
   /* USER CODE END RTOS_QUEUES */
 
@@ -201,6 +212,10 @@ void MX_FREERTOS_Init(void) {
   osThreadDef(NetworkReceiveT, StartNetworkReceiveTask, osPriorityBelowNormal, 0, 128);
   NetworkReceiveTHandle = osThreadCreate(osThread(NetworkReceiveT), NULL);
 
+  /* definition and creation of OLEDTask */
+  osThreadDef(OLEDTask, StartOLEDTask, osPriorityIdle, 0, 128);
+  OLEDTaskHandle = osThreadCreate(osThread(OLEDTask), NULL);
+
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
@@ -218,8 +233,6 @@ void StartCapADCTask(void const * argument)
 {
   /* USER CODE BEGIN StartCapADCTask */
   uint8_t s[2];
-  HAL_ADC_Start_DMA(&hadc1,&adc1_7_res,1);
-  HAL_TIM_Base_Start(&htim3);
   /* Infinite loop */
   
   //speed test
@@ -231,18 +244,29 @@ void StartCapADCTask(void const * argument)
   //   // osDelay(40);
   // }
   //speed test
-
+  uint8_t pos=0;
+  float vol[16];
+  for (int i=0;i<16;i++)
+    cap_avg += (vol[i] = GetCapVol());
+  cap_avg /= 16;
   for(uint8_t i=1;1;i++)
   {
-    if (adc1_7_res > MAX_CAP_VOL * 1.0 * (1<<12) / 3.3 / 5)
+    if (GetCapVol() > MAX_CAP_VOL)
       ChargerOff();
-    if (adc1_7_res < MIN_CAP_VOL * 1.0 * (1<<12) / 3.3 / 5)
+    if (GetCapVol() < MIN_CAP_VOL)
       ChargerOn();
     if (!i)
     {
       s[0] = (uint8_t)(adc1_7_res&0xFF);
       s[1] = (uint8_t)(adc1_7_res>>8);
       SendUDPPackage(6,0,s,2);
+    }
+    if (!(i & (1<<4)))
+    {
+      cap_avg -= vol[pos]/16;
+      vol[pos] = GetCapVol();
+      cap_avg += vol[pos]/16;
+      pos = ++pos == 16 ? 0 : pos;
     }
     osDelay(5);
   }
@@ -278,9 +302,20 @@ __weak void StartMotorTask(void const * argument)
 {
   /* USER CODE BEGIN StartMotorTask */
   /* Infinite loop */
+  StartCharge();
+  MotorStatus = MOTOR_RUNNING;
+  moto_turn_around();
   for(;;)
   {
     osDelay(1);
+    if (MotorStatus != MOTOR_RUNNING)
+      continue;
+    if (Find_situation() == TURN_LEFT)
+			moto_sprint_left();
+    if (Find_situation() == TURN_RIGHT)
+			moto_sprint_right();
+    if (Find_situation() == GO_STRAIGHT)
+      moto_straight();
   }
   /* USER CODE END StartMotorTask */
 }
@@ -326,34 +361,22 @@ void StartNetworkReceiveTask(void const * argument)
   /* USER CODE BEGIN StartNetworkReceiveTask */
   /* Infinite loop */
   uint8_t op, qos, prt, id;
-  size_t rlen,elen, len;
-  uint8_t *raw, *p, *praw;
+  size_t rlen, len;
+  uint8_t *raw, *praw;
   praw = raw = (uint8_t *)pvPortMalloc(UART_BUF_SIZE+1);
   uint16_t header;
   uint32_t crc;
   for(;;)
   {
-    // xQueueReceive(ReceiveQueueHandle,&pos,portMAX_DELAY);
-    // xStreamBufferReceive(ReceiveQueueHandle,&pos,sizeof(uint8_t),portMAX_DELAY);
     raw = praw;
     rlen = xMessageBufferReceive(ReceiveQueueHandle,raw,UART_BUF_SIZE,portMAX_DELAY);
     if (rlen == 0)
       itm_printf("Weird, xMBR report buffer too small\n");
     raw[rlen]='\0';
-    p = (uint8_t *)strchr((char *)raw, ':');
     // itm_printf("%d:#%s#\n",rlen,raw);
     // for (uint8_t i = 0;i<rlen;i++)
     //   itm_printf("%02x",raw[i]);
     // itm_printf("\n");
-    if (p == NULL) // unknown uart package type, drop
-      continue;
-    elen = 0;
-    for (uint8_t *i=raw+5;i<p;i++)
-      elen = elen*10 + (*i) - '0';
-    if (elen != rlen - (p + 1 - raw)) // uart package len error, drop
-      continue;
-    raw = p + 1;
-    rlen = elen;
     header = HammingUnpack(*((uint16_t *)raw));
     // for now, we don't support ACK request resend
     if (__builtin_popcount(header) & 1) // header check failed, drop package
@@ -423,23 +446,70 @@ void StartNetworkReceiveTask(void const * argument)
   /* USER CODE END StartNetworkReceiveTask */
 }
 
+/* USER CODE BEGIN Header_StartOLEDTask */
+/**
+* @brief Function implementing the OLEDTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartOLEDTask */
+void StartOLEDTask(void const * argument)
+{
+  /* USER CODE BEGIN StartOLEDTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    OLED_ShowPerc(GetAvgCapVol());
+    osDelay(1000);
+  }
+  /* USER CODE END StartOLEDTask */
+}
+
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
 
 void ChargerOn()
 {
-  if (adc1_7_res <= MAX_CAP_VOL * 1.0 * (1<<12) / 3.3 / 5)
+  if (GetCapVol() <= MAX_CAP_VOL)
     HAL_GPIO_WritePin(ChargerCtrl_GPIO_Port,ChargerCtrl_Pin,GPIO_PIN_RESET);
 }
 void ChargerOff()
 {
   
-  if (adc1_7_res >= MIN_CAP_VOL * 1.0 * (1<<12) / 3.3 / 5)
+  if (GetCapVol() >= MIN_CAP_VOL)
     HAL_GPIO_WritePin(ChargerCtrl_GPIO_Port,ChargerCtrl_Pin,GPIO_PIN_SET);
 }
-void MotorStart() {}
-void MotorStop() {}
+void MotorStart()
+{
+  MotorStatus = MOTOR_RUNNING;
+  moto_straight();
+}
+void MotorStop()
+{
+  MotorStatus = MOTOR_STOPPED;
+  moto_stop();
+}
 void MotorSpeed() {}
+inline float GetCapVol() {return 3.3 * 5 * adc1_7_res/((1<<12)-1);}
+inline float GetAvgCapVol() {return cap_avg;}
+
+void StartCharge()
+{
+  // uint32_t start_time = GlobalTick;
+  for (uint16_t t=1;(GetCapVol() <10.0 && t<=60);t++)
+  {
+    OLED_ShowTim(GetCapVol(), t);
+    vTaskDelay(1000);
+  }
+  OLED_Clear();
+  OLED_ShowChinese(25,22,17,20,1);
+  OLED_ShowChinese(45,22,18,20,1);
+  OLED_ShowChinese(65,22,19,20,1);
+  OLED_ShowChinese(85,22,20,20,1);
+  OLED_Refresh();
+  OLED_Clear();
+  OLED_TypeP();
+}
 
 uint8_t SendAMGData(const AMGData * data,int qos)
 {
@@ -567,7 +637,6 @@ uint8_t SendUDPPackage(uint8_t op, uint8_t qos, uint8_t *data, size_t len)
       osMutexRelease(UDPSendMutexHandle);
       return NETWORK_SEND_FAILED;
     }
-    // itm_printf("%d\n",xPortGetFreeHeapSize());
     raw = (uint8_t *)pvPortMalloc(plen + 3);
     // itm_printf("%p:%d %d\n",raw,len,plen);
     memcpy(raw,(uint8_t *)(&header),2);
@@ -585,7 +654,6 @@ uint8_t SendUDPPackage(uint8_t op, uint8_t qos, uint8_t *data, size_t len)
   }
   else
   {
-    // itm_printf("%d\n",xPortGetFreeHeapSize());
     raw = (uint8_t *)pvPortMalloc(plen + 2);
     // itm_printf("%p\n",raw);
     memcpy(raw,(uint8_t *)(&header),2);
