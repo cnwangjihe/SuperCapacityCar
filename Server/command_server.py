@@ -4,6 +4,7 @@ import select
 import queue
 import random
 import zlib
+# import display
 
 
 ACK_MAX_RETRY = 3

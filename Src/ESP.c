@@ -15,6 +15,8 @@ uint8_t ESPSend(uint8_t *raw,size_t len)
 
 void ESPInit()
 {
+    HAL_GPIO_WritePin(ESP_RST_GPIO_Port,ESP_RST_Pin,GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(ESP_RST_GPIO_Port,ESP_RST_Pin,GPIO_PIN_SET);
     HAL_UART_Transmit(&espuart,(uint8_t *)ESP_BOUND,sizeof(ESP_BOUND-1),300);
     return ;
 }

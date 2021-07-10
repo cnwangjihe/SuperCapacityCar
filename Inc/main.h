@@ -84,6 +84,8 @@ void Error_Handler(void);
 #define DC_GPIO_Port GPIOB
 #define CS_Pin GPIO_PIN_8
 #define CS_GPIO_Port GPIOD
+#define ESP_RST_Pin GPIO_PIN_8
+#define ESP_RST_GPIO_Port GPIOA
 #define L1_Pin GPIO_PIN_0
 #define L1_GPIO_Port GPIOD
 #define L3_Pin GPIO_PIN_1
@@ -131,6 +133,7 @@ void Error_Handler(void);
 #define MIN_CAP_VOL 2
 #define MOTOR_STOPPED 0
 #define MOTOR_RUNNING 1
+#define MOTOR_STARTED 2
 #define RECEIVE_QUEUE_MAX 0x80
 #define ITMassert(x,y) if ((x) == 0) {printf("%s",(y));}
 #define DEBUG

@@ -88,7 +88,6 @@ osThreadId ChargerADCTaskHandle;
 osThreadId MotorTaskHandle;
 osThreadId NetworkSendTaskHandle;
 osThreadId NetworkReceiveTHandle;
-osThreadId OLEDTaskHandle;
 osMutexId ACKQueueMutexHandle;
 osMutexId UDPSendMutexHandle;
 
@@ -112,6 +111,7 @@ inline uint16_t HammingPack(uint16_t v);
 inline uint8_t GetACKid();
 void FreeACK(uint8_t id);
 void ACKSemaphoreInit();
+void StartOLEDTask(void const * argument);
 void StartSingleACKTask(void const * argument);
 /* USER CODE END FunctionPrototypes */
 
@@ -120,7 +120,6 @@ void StartChargerADCTask(void const * argument);
 void StartMotorTask(void const * argument);
 void StartNetworkSendTask(void const * argument);
 void StartNetworkReceiveTask(void const * argument);
-void StartOLEDTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -154,6 +153,7 @@ void MX_FREERTOS_Init(void) {
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4);
   moto_stop();
+  MotorStatus = MOTOR_STOPPED;
   OLED_InitShow();
   idTail = (uint8_t)(HAL_RNG_GetRandomNumber(&hrng) >> (32-8+1));
   HAL_TIM_Base_Start_IT(&htim9);
@@ -211,10 +211,6 @@ void MX_FREERTOS_Init(void) {
   /* definition and creation of NetworkReceiveT */
   osThreadDef(NetworkReceiveT, StartNetworkReceiveTask, osPriorityBelowNormal, 0, 128);
   NetworkReceiveTHandle = osThreadCreate(osThread(NetworkReceiveT), NULL);
-
-  /* definition and creation of OLEDTask */
-  osThreadDef(OLEDTask, StartOLEDTask, osPriorityIdle, 0, 128);
-  OLEDTaskHandle = osThreadCreate(osThread(OLEDTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -302,20 +298,41 @@ __weak void StartMotorTask(void const * argument)
 {
   /* USER CODE BEGIN StartMotorTask */
   /* Infinite loop */
-  StartCharge();
-  MotorStatus = MOTOR_RUNNING;
+  // StartCharge();
+  // MotorStatus = MOTOR_RUNNING;
+  uint8_t t;
+  xTaskCreate((void *)StartOLEDTask, NULL, 128,NULL, osPriorityIdle, NULL);
+  MotorStatus = MOTOR_STOPPED;
+  while (MotorStatus != MOTOR_RUNNING)
+    osDelay(5);
   moto_turn_around();
+  MotorStop();
+  // while (Find_situation() != CIRCLE)
+  //   osDelay(1);
+  // moto_anti_clockwise();
+  // while (Find_situation() != POSITION_OK)
+  //   osDelay(1);
   for(;;)
   {
     osDelay(1);
     if (MotorStatus != MOTOR_RUNNING)
       continue;
-    if (Find_situation() == TURN_LEFT)
+    t = Find_situation();
+    if (t == TURN_LEFT)
+    {
 			moto_sprint_left();
-    if (Find_situation() == TURN_RIGHT)
+      itm_printf("Left\n");
+    }
+    else if (t == TURN_RIGHT)
+    {
 			moto_sprint_right();
-    if (Find_situation() == GO_STRAIGHT)
+      itm_printf("Right\n");
+    }
+    else
+    {
       moto_straight();
+      itm_printf("Straight\n");
+    }
   }
   /* USER CODE END StartMotorTask */
 }
@@ -446,25 +463,6 @@ void StartNetworkReceiveTask(void const * argument)
   /* USER CODE END StartNetworkReceiveTask */
 }
 
-/* USER CODE BEGIN Header_StartOLEDTask */
-/**
-* @brief Function implementing the OLEDTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartOLEDTask */
-void StartOLEDTask(void const * argument)
-{
-  /* USER CODE BEGIN StartOLEDTask */
-  /* Infinite loop */
-  for(;;)
-  {
-    OLED_ShowPerc(GetAvgCapVol());
-    osDelay(1000);
-  }
-  /* USER CODE END StartOLEDTask */
-}
-
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
 
@@ -482,7 +480,7 @@ void ChargerOff()
 void MotorStart()
 {
   MotorStatus = MOTOR_RUNNING;
-  moto_straight();
+  // moto_straight();
 }
 void MotorStop()
 {
@@ -506,9 +504,6 @@ void StartCharge()
   OLED_ShowChinese(45,22,18,20,1);
   OLED_ShowChinese(65,22,19,20,1);
   OLED_ShowChinese(85,22,20,20,1);
-  OLED_Refresh();
-  OLED_Clear();
-  OLED_TypeP();
 }
 
 uint8_t SendAMGData(const AMGData * data,int qos)
@@ -551,6 +546,18 @@ void FreeACK(uint8_t id)
   ACKTimes[id] = 0;
   ACK[id].len = 0;
   ACK[id].id = 0;
+}
+
+void StartOLEDTask(void const * argument)
+{
+  OLED_Refresh();
+  OLED_Clear();
+  OLED_TypeP();
+  for(;;)
+  {
+    OLED_ShowPerc(GetAvgCapVol());
+    osDelay(1000);
+  }
 }
 
 void StartSingleACKTask(void const * argument)
@@ -666,6 +673,10 @@ uint8_t SendUDPPackage(uint8_t op, uint8_t qos, uint8_t *data, size_t len)
   }
   t.data = raw;
   t.len = len;
+  itm_printf("%d:#%s#\n",len,raw);
+  for (uint8_t i = 0;i<len;i++)
+    itm_printf("%02x",raw[i]);
+  itm_printf("\n");
   if (xQueueSend(SendQueueHandle,&t,pdMS_TO_TICKS(100))!=pdPASS)
   {
     vPortFree(raw);
